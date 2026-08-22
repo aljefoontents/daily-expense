@@ -92,7 +92,7 @@ function money(n){
 }
 
 function num(v){
-  return Math.max(0,Number(v)||0);
+  return Number(v)||0;
 }
 
 function emptyRow(cols,msg="No entries"){

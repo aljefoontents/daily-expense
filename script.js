@@ -1015,46 +1015,114 @@ function printSelected(sections){
     "remarks"
   ];
 
-  all.forEach(s=>{
+  const map={
+    summary:".mini-summary",
+    jobs:".report-block:nth-of-type(1)",
+    cash:".report-block:nth-of-type(2)",
+    expenses:".report-block:nth-of-type(3)",
+    bank:".report-block:nth-of-type(4)",
+    petty:".report-block:nth-of-type(5)",
+    inactive:".report-block:nth-of-type(6)",
+    remarks:".report-block:nth-of-type(7)"
+  };
 
-    const map={
-      summary:".mini-summary",
-      jobs:".report-block:nth-of-type(1)",
-      cash:".report-block:nth-of-type(2)",
-      expenses:".report-block:nth-of-type(3)",
-      bank:".report-block:nth-of-type(4)",
-      petty:".report-block:nth-of-type(5)",
-      inactive:".report-block:nth-of-type(6)",
-      remarks:".report-block:nth-of-type(7)"
-    };
+  /*
+    =====================================================
+    PRINT DATE
+    =====================================================
+
+    Always use the date selected in the Dashboard calendar.
+
+    Example:
+    Dashboard date = 21/08/2026
+    Printed report = 21/08/2026
+
+    It will NOT use today's computer date.
+  */
+
+  const reportTitle=document.querySelector(".report-title");
+  const originalTitle=reportTitle ? reportTitle.innerHTML : "";
+
+  if(reportTitle){
+
+    let selectedDate=state.date;
+
+    /*
+      If the calendar currently has a value, use that value.
+      This makes sure the latest selected calendar date is used.
+    */
+    const dateInput=document.getElementById("reportDate");
+
+    if(dateInput && dateInput.value){
+      selectedDate=dateInput.value;
+    }
+
+    if(selectedDate){
+
+      const parts=selectedDate.split("-");
+
+      if(parts.length===3){
+
+        const formattedDate=
+          `${parts[2]}/${parts[1]}/${parts[0]}`;
+
+        reportTitle.innerHTML=
+          `SUMMARY DASHBOARD <span class="print-report-date">— ${formattedDate}</span>`;
+
+      }else{
+
+        reportTitle.textContent=
+          `SUMMARY DASHBOARD — ${selectedDate}`;
+
+      }
+
+    }
+  }
+
+
+  /*
+    =====================================================
+    SELECT WHAT TO PRINT
+    =====================================================
+  */
+
+  all.forEach(s=>{
 
     const el=document.querySelector(map[s]);
 
     if(el){
+
       el.classList.toggle(
         "hidden-print",
         !sections.includes(s)
       );
+
     }
 
   });
 
+
+  /*
+    =====================================================
+    PRINT
+    =====================================================
+  */
+
   window.print();
+
+
+  /*
+    =====================================================
+    RESTORE SCREEN AFTER PRINTING
+    =====================================================
+
+    The date remains visible only on the printed report.
+    The normal dashboard layout is restored afterwards.
+  */
 
   setTimeout(()=>{
 
     all.forEach(s=>{
-
-      const map={
-        summary:".mini-summary",
-        jobs:".report-block:nth-of-type(1)",
-        cash:".report-block:nth-of-type(2)",
-        expenses:".report-block:nth-of-type(3)",
-        bank:".report-block:nth-of-type(4)",
-        petty:".report-block:nth-of-type(5)",
-        inactive:".report-block:nth-of-type(6)",
-        remarks:".report-block:nth-of-type(7)"
-      };
 
       const el=document.querySelector(map[s]);
 
@@ -1063,6 +1131,10 @@ function printSelected(sections){
       }
 
     });
+
+    if(reportTitle){
+      reportTitle.innerHTML=originalTitle;
+    }
 
   },500);
 }

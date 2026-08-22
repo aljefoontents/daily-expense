@@ -1,32 +1,6 @@
-/* =====================================================
-   AL JEFOON TENTS
-   DAILY EXPENSE REPORT
-   SCRIPT.JS
-   VERSION 3.0
+const KEY="alJefoonDailyExpenseReportV1";
 
-   FEATURES
-   -----------------------------------------------------
-   - Date-based daily records
-   - Selected dashboard date controls the report
-   - Automatic petty cash opening carry-forward
-   - Previous day's closing becomes next day's opening
-   - Negative amounts allowed
-   - Cash received automatically affects petty cash
-   - Expenses automatically affect petty cash
-   - Date-specific remarks
-   - Selected-date printing
-   - Existing data migration
-   ===================================================== */
-
-
-const KEY = "alJefoonDailyExpenseReportV1";
-
-
-/* =====================================================
-   PETTY CASH HOLDERS
-   ===================================================== */
-
-const holders = [
+const holders=[
   {name:"Ali",active:true},
   {name:"Saud",active:true},
   {name:"Zohaib",active:true},
@@ -36,82 +10,35 @@ const holders = [
   {name:"Malik",active:false}
 ];
 
+let state=load();
+
 
 /* =====================================================
    DATE HELPERS
    ===================================================== */
 
-/*
-  Get today's date without UTC conversion problems.
+function todayString(){
+  const d=new Date();
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,"0");
+  const day=String(d.getDate()).padStart(2,"0");
 
-  Using toISOString() can sometimes show the wrong day
-  depending on timezone. This function uses local time.
-*/
-function todayLocal(){
-
-  const d = new Date();
-
-  const year = d.getFullYear();
-  const month = String(d.getMonth()+1).padStart(2,"0");
-  const day = String(d.getDate()).padStart(2,"0");
-
-  return `${year}-${month}-${day}`;
+  return `${y}-${m}-${day}`;
 }
 
-
-/*
-  Format YYYY-MM-DD as DD/MM/YYYY.
-*/
 function formatDate(date){
 
   if(!date) return "";
 
-  const parts = String(date).split("-");
+  const parts=String(date).split("-");
 
-  if(parts.length !== 3){
-    return date;
-  }
+  if(parts.length!==3) return date;
 
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
-
-/*
-  Get the previous calendar date.
-*/
-function previousDate(date){
-
-  if(!date) return "";
-
-  const parts = date.split("-");
-
-  if(parts.length !== 3) return "";
-
-  const d = new Date(
-    Number(parts[0]),
-    Number(parts[1])-1,
-    Number(parts[2])
-  );
-
-  d.setDate(d.getDate()-1);
-
-  const year = d.getFullYear();
-  const month = String(d.getMonth()+1).padStart(2,"0");
-  const day = String(d.getDate()).padStart(2,"0");
-
-  return `${year}-${month}-${day}`;
-}
-
-
-/*
-  Get all dates between two dates if needed.
-*/
-function compareDates(a,b){
-
-  if(a < b) return -1;
-  if(a > b) return 1;
-
-  return 0;
+function dateValue(date){
+  return String(date||"");
 }
 
 
@@ -121,304 +48,195 @@ function compareDates(a,b){
 
 function defaultState(){
 
-  const date = todayLocal();
-
   return {
-
-    date:date,
+    date:todayString(),
 
     jobs:[],
-
     cash:[],
-
     expenses:[],
-
     bank:[],
 
-    /*
-      Petty cash is now stored by DATE.
+    petty:holders.map(h=>({
+      holder:h.name,
 
-      Example:
+      /*
+        baseOpening is the ORIGINAL opening balance.
+        Future days automatically use the previous day's
+        closing balance.
+      */
+      baseOpening:0,
 
-      pettyDaily: {
-        "2026-08-21": [
-          { holder:"Ali", opening:100, ... }
-        ],
+      /*
+        Keep old opening field for compatibility with
+        existing saved data.
+      */
+      opening:0,
 
-        "2026-08-22": [
-          { holder:"Ali", opening:75, ... }
-        ]
-      }
-    */
-    pettyDaily:{},
+      received:0,
+      expenses:0,
 
-    /*
-      Remarks are also stored by date.
-    */
-    remarksByDate:{}
+      active:h.active
+    })),
 
+    remarks:""
   };
 }
 
 
 /* =====================================================
-   MIGRATION / LOAD
+   LOAD
    ===================================================== */
 
 function load(){
 
   try{
 
-    const saved = JSON.parse(
+    const saved=JSON.parse(
       localStorage.getItem(KEY)
     );
 
-    const base = defaultState();
+    const base=defaultState();
 
-    if(!saved){
-      return base;
-    }
+    if(!saved) return base;
 
 
-    /*
-      ---------------------------------------------------
-      DATE
-      ---------------------------------------------------
-    */
+    /* Arrays */
 
-    saved.date = saved.date || base.date;
+    saved.cash=Array.isArray(saved.cash)
+      ? saved.cash
+      : [];
 
+    saved.expenses=Array.isArray(saved.expenses)
+      ? saved.expenses
+      : [];
 
-    /*
-      ---------------------------------------------------
-      BASIC ARRAYS
-      ---------------------------------------------------
-    */
+    saved.jobs=Array.isArray(saved.jobs)
+      ? saved.jobs
+      : [];
 
-    saved.jobs =
-      Array.isArray(saved.jobs)
-        ? saved.jobs
-        : [];
+    saved.bank=Array.isArray(saved.bank)
+      ? saved.bank
+      : [];
 
-    saved.cash =
-      Array.isArray(saved.cash)
-        ? saved.cash
-        : [];
-
-    saved.expenses =
-      Array.isArray(saved.expenses)
-        ? saved.expenses
-        : [];
-
-    saved.bank =
-      Array.isArray(saved.bank)
-        ? saved.bank
-        : [];
+    saved.petty=Array.isArray(saved.petty)
+      ? saved.petty
+      : base.petty;
 
 
-    /*
-      ---------------------------------------------------
-      MIGRATE OLD TRANSACTIONS
-      ---------------------------------------------------
+    /* Date */
 
-      Old version did not store a date on jobs/cash/
-      expenses.
+    saved.date=saved.date||base.date;
 
-      We assign those old records to the saved report
-      date so they are not lost.
-    */
+    saved.remarks=saved.remarks||"";
 
-    saved.jobs.forEach(r=>{
-      if(!r.date){
-        r.date = saved.date;
+
+    /* =================================================
+       MIGRATE OLD PETTY CASH DATA
+       ================================================= */
+
+    saved.petty.forEach(p=>{
+
+      if(typeof p.baseOpening==="undefined"){
+
+        p.baseOpening=num(
+          typeof p.opening!=="undefined"
+            ? p.opening
+            : 0
+        );
+
       }
+
+      if(typeof p.opening==="undefined"){
+        p.opening=p.baseOpening;
+      }
+
+      if(typeof p.received==="undefined"){
+        p.received=0;
+      }
+
+      if(typeof p.expenses==="undefined"){
+        p.expenses=0;
+      }
+
+      p.active=
+        typeof p.active==="boolean"
+          ? p.active
+          : true;
+
     });
+
+
+    /* =================================================
+       ADD MISSING HOLDERS
+       ================================================= */
+
+    holders.forEach(h=>{
+
+      const exists=saved.petty.some(
+        p=>
+          normalizeName(p.holder)
+          ===
+          normalizeName(h.name)
+      );
+
+      if(!exists){
+
+        saved.petty.push({
+          holder:h.name,
+          baseOpening:0,
+          opening:0,
+          received:0,
+          expenses:0,
+          active:h.active
+        });
+
+      }
+
+    });
+
+
+    /*
+      Existing transactions from the old version did not
+      have a date.
+
+      Assign them to the saved report date so they do not
+      disappear after the new date filtering is enabled.
+    */
 
     saved.cash.forEach(r=>{
       if(!r.date){
-        r.date = saved.date;
+        r.date=saved.date;
       }
     });
 
     saved.expenses.forEach(r=>{
       if(!r.date){
-        r.date = saved.date;
+        r.date=saved.date;
+      }
+    });
+
+    saved.jobs.forEach(r=>{
+      if(!r.date){
+        r.date=saved.date;
       }
     });
 
     saved.bank.forEach(r=>{
       if(!r.date){
-        r.date = saved.date;
+        r.date=saved.date;
       }
     });
 
-
-    /*
-      ---------------------------------------------------
-      MIGRATE PETTY CASH
-      ---------------------------------------------------
-
-      Old version used:
-
-      saved.petty = [
-        {
-          holder:"Ali",
-          opening:0,
-          received:0,
-          expenses:0,
-          active:true
-        }
-      ]
-
-      New version uses:
-
-      pettyDaily = {
-        "YYYY-MM-DD":[...]
-      }
-    */
-
-    if(!saved.pettyDaily){
-
-      saved.pettyDaily = {};
-
-      if(Array.isArray(saved.petty)){
-
-        saved.pettyDaily[saved.date] =
-          saved.petty.map(p=>({
-
-            holder:p.holder,
-
-            opening:num(p.opening),
-
-            /*
-              These fields are retained for compatibility.
-              Automatic calculations are handled separately.
-            */
-            received:num(p.received),
-
-            expenses:num(p.expenses),
-
-            active:
-              typeof p.active === "boolean"
-                ? p.active
-                : true
-
-          }));
-
-      }
-
-    }
-
-
-    /*
-      Make sure pettyDaily is an object.
-    */
-    if(
-      typeof saved.pettyDaily !== "object" ||
-      Array.isArray(saved.pettyDaily)
-    ){
-
-      saved.pettyDaily = {};
-
-    }
-
-
-    /*
-      Make sure all existing petty cash dates contain
-      all current holders.
-    */
-    Object.keys(saved.pettyDaily).forEach(date=>{
-
-      if(!Array.isArray(saved.pettyDaily[date])){
-        saved.pettyDaily[date] = [];
-      }
-
-      holders.forEach(h=>{
-
-        const exists =
-          saved.pettyDaily[date].some(
-            p =>
-              normalizeName(p.holder) ===
-              normalizeName(h.name)
-          );
-
-        if(!exists){
-
-          saved.pettyDaily[date].push({
-
-            holder:h.name,
-
-            opening:0,
-
-            received:0,
-
-            expenses:0,
-
-            active:h.active
-
-          });
-
-        }
-
-      });
-
-    });
-
-
-    /*
-      ---------------------------------------------------
-      REMARKS MIGRATION
-      ---------------------------------------------------
-    */
-
-    if(!saved.remarksByDate){
-
-      saved.remarksByDate = {};
-
-      if(saved.remarks){
-
-        saved.remarksByDate[saved.date] =
-          saved.remarks;
-
-      }
-
-    }
-
-    if(
-      typeof saved.remarksByDate !== "object" ||
-      Array.isArray(saved.remarksByDate)
-    ){
-
-      saved.remarksByDate = {};
-
-    }
-
-
-    /*
-      Return the migrated state.
-    */
 
     return saved;
 
   }catch(e){
 
-    console.error(
-      "Error loading saved data:",
-      e
-    );
+    console.error("Load error:",e);
 
     return defaultState();
-
   }
-
 }
-
-
-/* =====================================================
-   GLOBAL STATE
-   ===================================================== */
-
-let state = load();
 
 
 /* =====================================================
@@ -433,69 +251,52 @@ function save(){
   );
 
   renderAll();
-
 }
 
 
 /* =====================================================
-   ESCAPE HTML
+   GENERAL HELPERS
    ===================================================== */
 
 function esc(v){
 
-  return String(v ?? "")
-    .replace(/[&<>"']/g,m=>({
-
+  return String(v??"").replace(
+    /[&<>"']/g,
+    m=>({
       "&":"&amp;",
       "<":"&lt;",
       ">":"&gt;",
       '"':"&quot;",
       "'":"&#039;"
-
-    }[m]));
+    }[m])
+  );
 
 }
 
-
-/* =====================================================
-   MONEY
-   ===================================================== */
 
 function money(n){
 
-  return "AED " +
-    Number(n || 0).toLocaleString(
-      "en-AE",
-      {
-        minimumFractionDigits:2,
-        maximumFractionDigits:2
-      }
-    );
+  return "AED "+Number(n||0).toLocaleString(
+    "en-AE",
+    {
+      minimumFractionDigits:2,
+      maximumFractionDigits:2
+    }
+  );
 
 }
 
 
-/* =====================================================
-   NUMBER
-   ===================================================== */
-
-/*
-  IMPORTANT:
-
-  Number("-27") returns -27.
-
-  The previous code already allowed negative values
-  mathematically. This version explicitly preserves
-  negative numbers as well.
-*/
-
 function num(v){
 
-  if(v === "" || v === null || v === undefined){
-    return 0;
-  }
+  /*
+    IMPORTANT:
+    Number("-27") correctly returns -27.
+    The old application therefore supports negative
+    numbers.
+  */
 
-  const n = Number(v);
+  const n=Number(v);
 
   return Number.isFinite(n)
     ? n
@@ -504,21 +305,12 @@ function num(v){
 }
 
 
-/* =====================================================
-   EMPTY ROW
-   ===================================================== */
-
-function emptyRow(
-  cols,
-  msg="No entries"
-){
+function emptyRow(cols,msg="No entries"){
 
   return `
     <tr>
-      <td
-        colspan="${cols}"
-        style="text-align:center;color:#777"
-      >
+      <td colspan="${cols}"
+          style="text-align:center;color:#777">
         ${msg}
       </td>
     </tr>
@@ -527,663 +319,371 @@ function emptyRow(
 }
 
 
-/* =====================================================
-   NORMALIZE NAME
-   ===================================================== */
-
 function normalizeName(value){
 
-  return String(value || "")
+  return String(value||"")
     .trim()
     .toLowerCase();
 
 }
 
 
+function sameDate(a,b){
+
+  return String(a||"")===String(b||"");
+
+}
+
+
 /* =====================================================
-   GET SELECTED DATE
+   SELECTED DATE
    ===================================================== */
 
 function selectedDate(){
 
-  const input =
-    document.getElementById("reportDate");
+  const input=document.getElementById("reportDate");
 
   if(input && input.value){
-
     return input.value;
-
   }
 
-  return state.date;
-
+  return state.date||todayString();
 }
 
 
 /* =====================================================
-   DATE FILTER
+   FILTER TRANSACTIONS BY REPORT DATE
    ===================================================== */
 
-function filterByDate(array,date){
+function getDaily(type,date=selectedDate()){
 
-  if(!Array.isArray(array)){
-    return [];
-  }
-
-  return array.filter(
-    r => String(r.date || "") === String(date)
+  return (state[type]||[]).filter(
+    r=>sameDate(r.date,date)
   );
 
 }
 
 
 /* =====================================================
-   CURRENT DATE DATA
+   PETTY CASH
    ===================================================== */
 
-function currentJobs(){
+/*
+  Find petty holder.
+*/
 
-  return filterByDate(
-    state.jobs,
-    selectedDate()
+function findPettyHolder(name){
+
+  const target=normalizeName(name);
+
+  if(!target) return null;
+
+  return state.petty.find(
+    p=>normalizeName(p.holder)===target
+  )||null;
+
+}
+
+
+/*
+  Get all cash received by a holder on a particular day.
+*/
+
+function automaticReceived(holderName,date){
+
+  return getDaily("cash",date).reduce(
+    (total,r)=>{
+
+      if(
+        normalizeName(r.receivedBy)
+        ===
+        normalizeName(holderName)
+      ){
+
+        return total+num(r.amount);
+
+      }
+
+      return total;
+
+    },
+    0
   );
 
 }
 
 
-function currentCash(){
+/*
+  Get all expenses paid by a holder on a particular day.
+*/
 
-  return filterByDate(
-    state.cash,
-    selectedDate()
-  );
+function automaticExpenses(holderName,date){
 
-}
+  return getDaily("expenses",date).reduce(
+    (total,r)=>{
 
+      if(
+        normalizeName(r.paidBy)
+        ===
+        normalizeName(holderName)
+      ){
 
-function currentExpenses(){
+        return total+num(r.amount);
 
-  return filterByDate(
-    state.expenses,
-    selectedDate()
-  );
+      }
 
-}
+      return total;
 
-
-function currentBank(){
-
-  return filterByDate(
-    state.bank,
-    selectedDate()
+    },
+    0
   );
 
 }
 
 
 /* =====================================================
-   PETTY CASH DAILY RECORDS
+   PREVIOUS DATE
    ===================================================== */
 
-function ensurePettyDate(date){
+function previousDate(date){
 
-  if(!date){
-    return;
-  }
+  const d=new Date(date+"T12:00:00");
 
-  if(!state.pettyDaily[date]){
+  d.setDate(d.getDate()-1);
 
-    state.pettyDaily[date] = [];
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,"0");
+  const day=String(d.getDate()).padStart(2,"0");
 
-  }
+  return `${y}-${m}-${day}`;
+
+}
 
 
-  holders.forEach(h=>{
+/* =====================================================
+   CHECK IF A DATE HAS ANY PETTY ACTIVITY
+   ===================================================== */
 
-    const exists =
-      state.pettyDaily[date].some(
-        p =>
-          normalizeName(p.holder) ===
-          normalizeName(h.name)
-      );
+function hasPettyActivity(holder,date){
 
-    if(!exists){
+  const cashReceived=
+    automaticReceived(holder,date);
 
-      state.pettyDaily[date].push({
+  const expensesPaid=
+    automaticExpenses(holder,date);
 
-        holder:h.name,
+  return cashReceived!==0 ||
+         expensesPaid!==0;
 
-        opening:0,
+}
 
-        received:0,
 
-        expenses:0,
+/* =====================================================
+   FIND PREVIOUS KNOWN PETTY BALANCE
+   ===================================================== */
 
-        active:h.active
+/*
+  This is the important part.
 
-      });
+  Example:
 
+  21 Aug:
+  Opening 20
+  Expense 10
+  Closing 10
+
+  22 Aug:
+  Opening automatically becomes 10.
+
+  22 Aug:
+  Expense 5
+  Closing becomes 5
+
+  23 Aug:
+  Opening automatically becomes 5.
+*/
+
+function getOpeningForDate(petty,date){
+
+  const targetDate=date;
+
+  /*
+    First look at the holder's original/base opening.
+  */
+
+  let balance=num(
+    typeof petty.baseOpening!=="undefined"
+      ? petty.baseOpening
+      : petty.opening
+  );
+
+
+  /*
+    We need to calculate all daily movements before
+    the selected date.
+  */
+
+  const allDates=new Set();
+
+  state.cash.forEach(r=>{
+    if(
+      r.date &&
+      r.date<targetDate &&
+      normalizeName(r.receivedBy)
+      ===
+      normalizeName(petty.holder)
+    ){
+      allDates.add(r.date);
     }
-
   });
 
-}
-
-
-/* =====================================================
-   FIND PETTY RECORD
-   ===================================================== */
-
-function findPettyHolder(
-  name,
-  date=selectedDate()
-){
-
-  ensurePettyDate(date);
-
-  const target =
-    normalizeName(name);
-
-  return state.pettyDaily[date]
-    .find(
-      p =>
-        normalizeName(p.holder) ===
-        target
-    ) || null;
-
-}
-
-
-/* =====================================================
-   PREVIOUS DAY PETTY RECORD
-   ===================================================== */
-
-function getPreviousPettyRecord(
-  holderName,
-  date
-){
-
-  const prev =
-    previousDate(date);
-
-  if(!prev){
-    return null;
-  }
-
-  if(
-    !state.pettyDaily[prev]
-  ){
-    return null;
-  }
-
-  return state.pettyDaily[prev]
-    .find(
-      p =>
-        normalizeName(p.holder) ===
-        normalizeName(holderName)
-    ) || null;
-
-}
-
-
-/* =====================================================
-   AUTOMATIC CASH RECEIVED
-   ===================================================== */
-
-function automaticReceived(
-  holderName,
-  date=selectedDate()
-){
-
-  return currentCash()
-    .filter(
-      r =>
-        String(r.date) === String(date) &&
-        normalizeName(r.receivedBy) ===
-        normalizeName(holderName)
-    )
-    .reduce(
-      (total,r)=>
-        total + num(r.amount),
-      0
-    );
-
-}
-
-
-/* =====================================================
-   AUTOMATIC EXPENSES
-   ===================================================== */
-
-function automaticExpenses(
-  holderName,
-  date=selectedDate()
-){
-
-  return currentExpenses()
-    .filter(
-      r =>
-        String(r.date) === String(date) &&
-        normalizeName(r.paidBy) ===
-        normalizeName(holderName)
-    )
-    .reduce(
-      (total,r)=>
-        total + num(r.amount),
-      0
-    );
-
-}
-
-
-/* =====================================================
-   PETTY CASH FIGURES
-   ===================================================== */
-
-function pettyFigures(
-  petty,
-  date=selectedDate()
-){
-
-  /*
-    ---------------------------------------------------
-    OPENING BALANCE
-    ---------------------------------------------------
-
-    If there is a previous day's petty cash record,
-    its closing balance automatically becomes today's
-    opening balance.
-
-    This is the important carry-forward feature.
-  */
-
-  const previous =
-    getPreviousPettyRecord(
-      petty.holder,
-      date
-    );
-
-
-  let opening;
-
-
-  if(previous){
-
-    /*
-      Previous day exists.
-
-      Therefore today's opening is ALWAYS the previous
-      day's closing.
-
-      No manual entry is required.
-    */
-
-    const previousFigures =
-      calculatePettyFiguresForDate(
-        previous,
-        previousDate(date)
-      );
-
-    opening =
-      previousFigures.closing;
-
-  }else{
-
-    /*
-      No previous day exists.
-
-      This is the first day for this holder, so use
-      the manually entered opening balance.
-    */
-
-    opening =
-      num(petty.opening);
-
-  }
+  state.expenses.forEach(r=>{
+    if(
+      r.date &&
+      r.date<targetDate &&
+      normalizeName(r.paidBy)
+      ===
+      normalizeName(petty.holder)
+    ){
+      allDates.add(r.date);
+    }
+  });
 
 
   /*
-    Automatic cash received for THIS DATE only.
+    Sort dates chronologically.
   */
 
-  const autoReceived =
-    automaticReceived(
-      petty.holder,
-      date
-    );
+  const dates=[...allDates].sort();
 
 
   /*
-    Automatic expenses for THIS DATE only.
+    Apply every day's movement.
   */
 
-  const autoExpenses =
-    automaticExpenses(
-      petty.holder,
-      date
-    );
+  dates.forEach(date=>{
 
-
-  /*
-    Manual values are retained for compatibility.
-
-    In the current interface Received and Expenses are
-    automatically calculated, so normally these will be 0.
-  */
-
-  const manualReceived =
-    num(petty.received);
-
-
-  const manualExpenses =
-    num(petty.expenses);
-
-
-  const received =
-    manualReceived +
-    autoReceived;
-
-
-  const expenses =
-    manualExpenses +
-    autoExpenses;
-
-
-  const closing =
-    opening +
-    received -
-    expenses;
-
-
-  return {
-
-    opening,
-
-    manualReceived,
-
-    manualExpenses,
-
-    autoReceived,
-
-    autoExpenses,
-
-    received,
-
-    expenses,
-
-    closing
-
-  };
-
-}
-
-
-/* =====================================================
-   CALCULATE PETTY FIGURES FOR ANY DATE
-   ===================================================== */
-
-function calculatePettyFiguresForDate(
-  petty,
-  date
-){
-
-  if(!petty){
-    return {
-
-      opening:0,
-      manualReceived:0,
-      manualExpenses:0,
-      autoReceived:0,
-      autoExpenses:0,
-      received:0,
-      expenses:0,
-      closing:0
-
-    };
-  }
-
-
-  const previous =
-    getPreviousPettyRecord(
-      petty.holder,
-      date
-    );
-
-
-  let opening;
-
-
-  if(previous){
-
-    /*
-      Prevent infinite recursion by directly calculating
-      the previous day's figures.
-
-      Previous opening comes from the day before it.
-    */
-
-    opening =
-      calculateOpeningBalance(
+    const received=
+      automaticReceived(
         petty.holder,
         date
       );
 
-  }else{
+    const expenses=
+      automaticExpenses(
+        petty.holder,
+        date
+      );
 
-    opening =
-      num(petty.opening);
+    balance=
+      balance
+      +received
+      -expenses;
 
-  }
+  });
 
 
-  const autoReceived =
+  return balance;
+
+}
+
+
+/* =====================================================
+   PETTY FIGURES
+   ===================================================== */
+
+function pettyFigures(petty,date=selectedDate()){
+
+  const opening=
+    getOpeningForDate(
+      petty,
+      date
+    );
+
+
+  const autoReceived=
     automaticReceived(
       petty.holder,
       date
     );
 
 
-  const autoExpenses =
+  const autoExpenses=
     automaticExpenses(
       petty.holder,
       date
     );
 
 
-  const manualReceived =
-    num(petty.received);
+  /*
+    Legacy manual values are only used on the original
+    saved date, so old data is not lost.
+
+    New petty cash movements should normally come from
+    Cash Received and Expenses.
+  */
+
+  let manualReceived=0;
+  let manualExpenses=0;
 
 
-  const manualExpenses =
-    num(petty.expenses);
+  /*
+    If this is the first/base date, preserve any old
+    manually entered petty cash values.
+  */
+
+  const baseDate=state.date;
+
+  if(date===baseDate){
+
+    manualReceived=
+      num(petty.received);
+
+    manualExpenses=
+      num(petty.expenses);
+
+  }
 
 
-  const received =
-    manualReceived +
+  const received=
+    manualReceived
+    +
     autoReceived;
 
 
-  const expenses =
-    manualExpenses +
+  const expenses=
+    manualExpenses
+    +
     autoExpenses;
 
 
-  const closing =
-    opening +
-    received -
+  const closing=
+    opening
+    +
+    received
+    -
     expenses;
 
 
   return {
 
     opening,
+
     manualReceived,
+
     manualExpenses,
+
     autoReceived,
+
     autoExpenses,
+
     received,
+
     expenses,
+
     closing
 
   };
-
-}
-
-
-/* =====================================================
-   CALCULATE OPENING BALANCE
-   ===================================================== */
-
-/*
-  This is the core carry-forward function.
-
-  Example:
-
-  21/08
-  Opening = 100
-  Received = 50
-  Expenses = 140
-  Closing = 10
-
-  22/08
-  Opening automatically = 10
-*/
-
-function calculateOpeningBalance(
-  holderName,
-  date
-){
-
-  const prev =
-    previousDate(date);
-
-
-  if(!prev){
-    return 0;
-  }
-
-
-  const previousRecord =
-    findPettyHolder(
-      holderName,
-      prev
-    );
-
-
-  /*
-    If there is no record for the previous day,
-    continue backwards until we find the most recent
-    petty cash record.
-
-    This also means if you skip a day, the balance
-    can still carry forward.
-  */
-
-  if(!previousRecord){
-
-    return findLastKnownClosing(
-      holderName,
-      prev
-    );
-
-  }
-
-
-  /*
-    Calculate the previous day's closing.
-  */
-
-  const previousFigures =
-    calculatePettyFiguresForDate(
-      previousRecord,
-      prev
-    );
-
-
-  return previousFigures.closing;
-
-}
-
-
-/* =====================================================
-   FIND LAST KNOWN CLOSING
-   ===================================================== */
-
-function findLastKnownClosing(
-  holderName,
-  beforeDate
-){
-
-  let date = beforeDate;
-
-
-  /*
-    Search backwards up to 10 years.
-
-    This prevents an infinite loop while still allowing
-    long-term daily records.
-  */
-
-  for(let i=0;i<3650;i++){
-
-    const record =
-      state.pettyDaily[date]
-        ? state.pettyDaily[date]
-            .find(
-              p =>
-                normalizeName(p.holder) ===
-                normalizeName(holderName)
-            )
-        : null;
-
-
-    if(record){
-
-      const figures =
-        calculatePettyFiguresForDate(
-          record,
-          date
-        );
-
-      return figures.closing;
-
-    }
-
-
-    date =
-      previousDate(date);
-
-  }
-
-
-  return 0;
-
-}
-
-
-/* =====================================================
-   GET PETTY RECORDS FOR CURRENT DATE
-   ===================================================== */
-
-function currentPetty(){
-
-  const date =
-    selectedDate();
-
-  ensurePettyDate(date);
-
-  return state.pettyDaily[date];
-
-}
-
-
-/* =====================================================
-   GET REMARKS
-   ===================================================== */
-
-function getRemarks(date=selectedDate()){
-
-  return state.remarksByDate[date] || "";
 
 }
 
@@ -1196,85 +696,61 @@ document.addEventListener(
   "DOMContentLoaded",
   ()=>{
 
-    /*
-      Make sure current date has petty records.
-    */
-
-    ensurePettyDate(state.date);
+    const reportDate=
+      document.getElementById("reportDate");
 
 
     /*
-      Set calendar.
+      Set current saved report date.
     */
 
-    document
-      .getElementById("reportDate")
-      .value = state.date;
+    reportDate.value=
+      state.date;
 
 
     /*
-      Calendar changed.
+      IMPORTANT:
+
+      Changing the calendar changes the active report date.
+
+      The petty cash opening balance is recalculated
+      automatically from previous days.
     */
 
-    document
-      .getElementById("reportDate")
-      .addEventListener(
-        "change",
-        e=>{
+    reportDate.addEventListener(
+      "change",
+      e=>{
 
-          const newDate =
-            e.target.value;
+        state.date=e.target.value;
 
-          if(!newDate){
-            return;
-          }
+        save();
 
-
-          state.date =
-            newDate;
-
-
-          /*
-            Make sure petty cash records exist for
-            the selected date.
-          */
-
-          ensurePettyDate(
-            newDate
-          );
-
-
-          save();
-
-        }
-      );
+      }
+    );
 
 
     /*
       Remarks.
     */
 
-    document
-      .getElementById("remarksInput")
-      .value =
-        getRemarks();
+    document.getElementById(
+      "remarksInput"
+    ).value=state.remarks;
 
 
-    document
-      .getElementById("remarksInput")
-      .addEventListener(
-        "input",
-        e=>{
+    document.getElementById(
+      "remarksInput"
+    ).addEventListener(
+      "input",
+      e=>{
 
-          state.remarksByDate[
-            selectedDate()
-          ] =
-            e.target.value;
+        state.remarks=
+          e.target.value;
 
-          save();
+        save();
 
-        }
-      );
+      }
+    );
 
 
     /*
@@ -1283,7 +759,7 @@ document.addEventListener(
 
     document
       .querySelectorAll(".nav-btn")
-      .forEach(b=>{
+      .forEach(b=>
 
         b.addEventListener(
           "click",
@@ -1291,160 +767,116 @@ document.addEventListener(
 
             document
               .querySelectorAll(".nav-btn")
-              .forEach(
-                x =>
-                  x.classList.remove("active")
+              .forEach(x=>
+                x.classList.remove("active")
               );
-
 
             document
               .querySelectorAll(".section")
-              .forEach(
-                x =>
-                  x.classList.remove("active")
+              .forEach(x=>
+                x.classList.remove("active")
               );
 
-
-            b.classList.add(
-              "active"
-            );
-
+            b.classList.add("active");
 
             document
               .getElementById(
                 b.dataset.section
               )
-              .classList.add(
-                "active"
-              );
+              .classList.add("active");
 
           }
-        );
+        )
 
-      });
+      );
 
 
     /*
       Print options.
     */
 
-    document
-      .getElementById("printOptionsBtn")
-      .onclick = ()=>{
+    document.getElementById(
+      "printOptionsBtn"
+    ).onclick=()=>{
 
-        document
-          .getElementById("printModal")
-          .classList.remove(
-            "hidden"
-          );
+      document
+        .getElementById("printModal")
+        .classList.remove("hidden");
 
-      };
+    };
 
 
-    /*
-      Main print button.
-    */
+    document.getElementById(
+      "printReportBtn"
+    ).onclick=()=>{
 
-    document
-      .getElementById("printReportBtn")
-      .onclick = ()=>{
+      printSelected([
+        "summary",
+        "jobs",
+        "cash",
+        "expenses",
+        "bank",
+        "petty",
+        "inactive",
+        "remarks"
+      ]);
 
-        printSelected([
-          "summary",
-          "jobs",
-          "cash",
-          "expenses",
-          "bank",
-          "petty",
-          "inactive",
-          "remarks"
-        ]);
-
-      };
+    };
 
 
-    /*
-      Close modal.
-    */
+    document.getElementById(
+      "closeModal"
+    ).onclick=()=>{
 
-    document
-      .getElementById("closeModal")
-      .onclick = ()=>{
+      document
+        .getElementById("printModal")
+        .classList.add("hidden");
 
-        document
-          .getElementById("printModal")
-          .classList.add(
-            "hidden"
-          );
-
-      };
+    };
 
 
-    /*
-      Print full.
-    */
+    document.getElementById(
+      "printFull"
+    ).onclick=()=>{
 
-    document
-      .getElementById("printFull")
-      .onclick = ()=>{
+      document
+        .getElementById("printModal")
+        .classList.add("hidden");
 
-        document
-          .getElementById("printModal")
-          .classList.add(
-            "hidden"
-          );
+      printSelected([
+        "summary",
+        "jobs",
+        "cash",
+        "expenses",
+        "bank",
+        "petty",
+        "inactive",
+        "remarks"
+      ]);
 
-
-        printSelected([
-          "summary",
-          "jobs",
-          "cash",
-          "expenses",
-          "bank",
-          "petty",
-          "inactive",
-          "remarks"
-        ]);
-
-      };
+    };
 
 
-    /*
-      Print selected.
-    */
+    document.getElementById(
+      "printSelected"
+    ).onclick=()=>{
 
-    document
-      .getElementById("printSelected")
-      .onclick = ()=>{
-
-        const selected = [
-          ...document
-            .querySelectorAll(
-              ".print-check:checked"
-            )
-        ]
-        .map(
-          x => x.value
-        );
+      const a=[
+        ...document.querySelectorAll(
+          ".print-check:checked"
+        )
+      ].map(x=>x.value);
 
 
-        document
-          .getElementById("printModal")
-          .classList.add(
-            "hidden"
-          );
+      document
+        .getElementById("printModal")
+        .classList.add("hidden");
 
 
-        printSelected(
-          selected
-        );
+      printSelected(a);
 
-      };
+    };
 
-
-    /*
-      Initial render.
-    */
 
     renderAll();
 
@@ -1453,7 +885,7 @@ document.addEventListener(
 
 
 /* =====================================================
-   ADD JOB
+   ADD
    ===================================================== */
 
 function addJob(){
@@ -1463,17 +895,11 @@ function addJob(){
     date:selectedDate(),
 
     jobNo:"",
-
     client:"",
-
     description:"",
-
     total:0,
-
     cash:0,
-
     incharge:"",
-
     status:"Pending"
 
   });
@@ -1483,10 +909,6 @@ function addJob(){
 }
 
 
-/* =====================================================
-   ADD CASH
-   ===================================================== */
-
 function addCash(){
 
   state.cash.push({
@@ -1494,11 +916,8 @@ function addCash(){
     date:selectedDate(),
 
     from:"",
-
     jobNo:"",
-
     amount:0,
-
     receivedBy:""
 
   });
@@ -1508,10 +927,6 @@ function addCash(){
 }
 
 
-/* =====================================================
-   ADD EXPENSE
-   ===================================================== */
-
 function addExpense(){
 
   state.expenses.push({
@@ -1519,11 +934,8 @@ function addExpense(){
     date:selectedDate(),
 
     paidTo:"",
-
     type:"",
-
     amount:0,
-
     paidBy:""
 
   });
@@ -1533,10 +945,6 @@ function addExpense(){
 }
 
 
-/* =====================================================
-   ADD BANK
-   ===================================================== */
-
 function addBank(){
 
   state.bank.push({
@@ -1544,11 +952,8 @@ function addBank(){
     date:selectedDate(),
 
     reference:"",
-
     from:"",
-
     amount:0,
-
     remarks:""
 
   });
@@ -1562,25 +967,12 @@ function addBank(){
    PETTY CASH STATUS
    ===================================================== */
 
-function setPettyStatus(
-  i,
-  status
-){
+function setPettyStatus(i,status){
 
-  const date =
-    selectedDate();
+  if(!state.petty[i]) return;
 
-  ensurePettyDate(date);
-
-
-  if(!state.pettyDaily[date][i]){
-    return;
-  }
-
-
-  state.pettyDaily[date][i].active =
-    status === "active";
-
+  state.petty[i].active=
+    status==="active";
 
   save();
 
@@ -1588,7 +980,7 @@ function setPettyStatus(
 
 
 /* =====================================================
-   UPDATE GENERIC ARRAY
+   UPDATE / DELETE
    ===================================================== */
 
 function updateArray(
@@ -1598,22 +990,32 @@ function updateArray(
   value
 ){
 
-  /*
-    Special handling for date-based arrays.
-  */
-
   if(
     !state[type] ||
     !state[type][i]
   ){
-
     return;
-
   }
 
 
-  state[type][i][key] =
-    value;
+  state[type][i][key]=value;
+
+
+  /*
+    If a transaction somehow does not have a date,
+    attach it to the currently selected dashboard date.
+  */
+
+  if(
+    ["cash","expenses","jobs","bank"].includes(type)
+    &&
+    !state[type][i].date
+  ){
+
+    state[type][i].date=
+      selectedDate();
+
+  }
 
 
   save();
@@ -1621,85 +1023,11 @@ function updateArray(
 }
 
 
-/* =====================================================
-   UPDATE PETTY OPENING
-   ===================================================== */
+function del(type,i){
 
-function updatePettyOpening(
-  i,
-  value
-){
+  if(!state[type]) return;
 
-  const date =
-    selectedDate();
-
-
-  ensurePettyDate(date);
-
-
-  const record =
-    state.pettyDaily[date][i];
-
-
-  if(!record){
-    return;
-  }
-
-
-  /*
-    If there is a previous balance, do NOT allow
-    today's opening to be manually changed.
-
-    It must come from yesterday's closing.
-  */
-
-  const previous =
-    getPreviousPettyRecord(
-      record.holder,
-      date
-    );
-
-
-  if(previous){
-
-    return;
-
-  }
-
-
-  record.opening =
-    num(value);
-
-
-  save();
-
-}
-
-
-/* =====================================================
-   DELETE
-   ===================================================== */
-
-function del(
-  type,
-  i
-){
-
-  if(
-    !state[type] ||
-    !state[type][i]
-  ){
-
-    return;
-
-  }
-
-
-  state[type].splice(
-    i,
-    1
-  );
-
+  state[type].splice(i,1);
 
   save();
 
@@ -1712,17 +1040,17 @@ function del(
 
 function renderJobs(){
 
-  const el =
+  const el=
     document.getElementById(
       "jobsEditor"
     );
 
 
-  const records =
-    currentJobs();
+  const daily=
+    getDaily("jobs");
 
 
-  el.innerHTML = `
+  el.innerHTML=`
 
   <div class="editor-table">
 
@@ -1733,19 +1061,12 @@ function renderJobs(){
   <tr>
 
     <th>Job No</th>
-
     <th>Client</th>
-
     <th>Description</th>
-
     <th>Total Amount</th>
-
     <th>Cash</th>
-
     <th>Incharge</th>
-
     <th>Status</th>
-
     <th></th>
 
   </tr>
@@ -1755,183 +1076,169 @@ function renderJobs(){
   <tbody>
 
   ${
-    records.map(
-      r=>{
+    daily.map((r)=>{
 
-        const i =
-          state.jobs.indexOf(r);
+      const i=
+        state.jobs.indexOf(r);
 
+      return `
 
-        return `
+      <tr>
 
-        <tr>
-
-          <td>
-            <input
-              value="${esc(r.jobNo)}"
-              onchange="
-                updateArray(
-                  'jobs',
-                  ${i},
-                  'jobNo',
-                  this.value
-                )
-              "
-            >
-          </td>
+      <td>
+        <input
+          value="${esc(r.jobNo)}"
+          onchange="
+            updateArray(
+              'jobs',
+              ${i},
+              'jobNo',
+              this.value
+            )
+          "
+        >
+      </td>
 
 
-          <td>
-            <input
-              value="${esc(r.client)}"
-              onchange="
-                updateArray(
-                  'jobs',
-                  ${i},
-                  'client',
-                  this.value
-                )
-              "
-            >
-          </td>
+      <td>
+        <input
+          value="${esc(r.client)}"
+          onchange="
+            updateArray(
+              'jobs',
+              ${i},
+              'client',
+              this.value
+            )
+          "
+        >
+      </td>
 
 
-          <td>
-            <input
-              value="${esc(r.description)}"
-              onchange="
-                updateArray(
-                  'jobs',
-                  ${i},
-                  'description',
-                  this.value
-                )
-              "
-            >
-          </td>
+      <td>
+        <input
+          value="${esc(r.description)}"
+          onchange="
+            updateArray(
+              'jobs',
+              ${i},
+              'description',
+              this.value
+            )
+          "
+        >
+      </td>
 
 
-          <td>
-            <input
-              type="number"
-              step="0.01"
-              value="${r.total}"
-              onchange="
-                updateArray(
-                  'jobs',
-                  ${i},
-                  'total',
-                  num(this.value)
-                )
-              "
-            >
-          </td>
+      <td>
+        <input
+          type="number"
+          step="0.01"
+          value="${r.total}"
+          onchange="
+            updateArray(
+              'jobs',
+              ${i},
+              'total',
+              num(this.value)
+            )
+          "
+        >
+      </td>
 
 
-          <td>
-            <input
-              type="number"
-              step="0.01"
-              value="${r.cash}"
-              onchange="
-                updateArray(
-                  'jobs',
-                  ${i},
-                  'cash',
-                  num(this.value)
-                )
-              "
-            >
-          </td>
+      <td>
+        <input
+          type="number"
+          step="0.01"
+          value="${r.cash}"
+          onchange="
+            updateArray(
+              'jobs',
+              ${i},
+              'cash',
+              num(this.value)
+            )
+          "
+        >
+      </td>
 
 
-          <td>
-            <input
-              value="${esc(r.incharge)}"
-              onchange="
-                updateArray(
-                  'jobs',
-                  ${i},
-                  'incharge',
-                  this.value
-                )
-              "
-            >
-          </td>
+      <td>
+        <input
+          value="${esc(r.incharge)}"
+          onchange="
+            updateArray(
+              'jobs',
+              ${i},
+              'incharge',
+              this.value
+            )
+          "
+        >
+      </td>
 
 
-          <td>
+      <td>
 
-            <select
-              onchange="
-                updateArray(
-                  'jobs',
-                  ${i},
-                  'status',
-                  this.value
-                )
-              "
-            >
+        <select
+          onchange="
+            updateArray(
+              'jobs',
+              ${i},
+              'status',
+              this.value
+            )
+          "
+        >
 
-              ${
-                [
-                  "Pending",
-                  "Partially Received",
-                  "Received",
-                  "No Amount"
-                ]
-                .map(
-                  x=>`
-                    <option
-                      ${
-                        r.status===x
-                          ? "selected"
-                          : ""
-                      }
-                    >
-                      ${x}
-                    </option>
-                  `
-                )
-                .join("")
-              }
+          ${
+            [
+              "Pending",
+              "Partially Received",
+              "Received",
+              "No Amount"
+            ]
+            .map(x=>`
 
-            </select>
+              <option
+                ${r.status===x?"selected":""}
+              >
+                ${x}
+              </option>
 
-          </td>
+            `).join("")
+          }
+
+        </select>
+
+      </td>
 
 
-          <td>
+      <td>
 
-            <button
-              class="delete-btn"
-              onclick="
-                del(
-                  'jobs',
-                  ${i}
-                )
-              "
-            >
-              Delete
-            </button>
+        <button
+          class="delete-btn"
+          onclick="
+            del('jobs',${i})
+          "
+        >
+          Delete
+        </button>
 
-          </td>
+      </td>
 
-        </tr>
+      </tr>
 
-        `;
+      `;
 
-      }
-    ).join("")
+    }).join("")
   }
 
   ${
-    records.length
+    daily.length
       ? ""
-      : emptyRow(
-          8,
-          `No jobs for ${formatDate(selectedDate())}`
-        )
+      : emptyRow(8)
   }
 
   </tbody>
@@ -1951,152 +1258,146 @@ function renderJobs(){
 
 function renderCash(){
 
-  const records =
-    currentCash();
+  const daily=
+    getDaily("cash");
 
 
-  document
-    .getElementById(
-      "cashEditor"
-    )
-    .innerHTML = `
+  document.getElementById(
+    "cashEditor"
+  ).innerHTML=`
 
-    <div class="editor-table">
+  <div class="editor-table">
 
-    <table>
+  <table>
 
-    <thead>
+  <thead>
 
-    <tr>
+  <tr>
 
-      <th>From Whom</th>
+    <th>From Whom</th>
+    <th>Job No</th>
+    <th>Cash</th>
+    <th>Received By</th>
+    <th></th>
 
-      <th>Job No</th>
+  </tr>
 
-      <th>Cash</th>
-
-      <th>Received By</th>
-
-      <th></th>
-
-    </tr>
-
-    </thead>
-
-    <tbody>
-
-    ${
-      records.map(
-        r=>{
-
-          const i =
-            state.cash.indexOf(r);
+  </thead>
 
 
-          return `
+  <tbody>
 
-          <tr>
+  ${
+    daily.map(r=>{
 
-            <td>
-              <input
-                value="${esc(r.from)}"
-                onchange="
-                  updateArray(
-                    'cash',
-                    ${i},
-                    'from',
-                    this.value
-                  )
-                "
-              >
-            </td>
+      const i=
+        state.cash.indexOf(r);
 
+      return `
 
-            <td>
-              <input
-                value="${esc(r.jobNo)}"
-                onchange="
-                  updateArray(
-                    'cash',
-                    ${i},
-                    'jobNo',
-                    this.value
-                  )
-                "
-              >
-            </td>
+      <tr>
+
+      <td>
+
+        <input
+          value="${esc(r.from)}"
+          onchange="
+            updateArray(
+              'cash',
+              ${i},
+              'from',
+              this.value
+            )
+          "
+        >
+
+      </td>
 
 
-            <td>
-              <input
-                type="number"
-                step="0.01"
-                value="${r.amount}"
-                onchange="
-                  updateArray(
-                    'cash',
-                    ${i},
-                    'amount',
-                    num(this.value)
-                  )
-                "
-              >
-            </td>
+      <td>
+
+        <input
+          value="${esc(r.jobNo)}"
+          onchange="
+            updateArray(
+              'cash',
+              ${i},
+              'jobNo',
+              this.value
+            )
+          "
+        >
+
+      </td>
 
 
-            <td>
-              <input
-                value="${esc(r.receivedBy)}"
-                onchange="
-                  updateArray(
-                    'cash',
-                    ${i},
-                    'receivedBy',
-                    this.value
-                  )
-                "
-              >
-            </td>
+      <td>
+
+        <input
+          type="number"
+          step="0.01"
+          value="${r.amount}"
+          onchange="
+            updateArray(
+              'cash',
+              ${i},
+              'amount',
+              num(this.value)
+            )
+          "
+        >
+
+      </td>
 
 
-            <td>
+      <td>
 
-              <button
-                class="delete-btn"
-                onclick="
-                  del(
-                    'cash',
-                    ${i}
-                  )
-                "
-              >
-                Delete
-              </button>
+        <input
+          value="${esc(r.receivedBy)}"
+          onchange="
+            updateArray(
+              'cash',
+              ${i},
+              'receivedBy',
+              this.value
+            )
+          "
+        >
 
-            </td>
+      </td>
 
-          </tr>
 
-          `;
+      <td>
 
-        }
-      ).join("")
-    }
+        <button
+          class="delete-btn"
+          onclick="
+            del('cash',${i})
+          "
+        >
+          Delete
+        </button>
 
-    ${
-      records.length
-        ? ""
-        : emptyRow(
-            5,
-            `No cash received for ${formatDate(selectedDate())}`
-          )
-    }
+      </td>
 
-    </tbody>
+      </tr>
 
-    </table>
+      `;
 
-    </div>
+    }).join("")
+  }
+
+  ${
+    daily.length
+      ? ""
+      : emptyRow(5)
+  }
+
+  </tbody>
+
+  </table>
+
+  </div>
 
   `;
 
@@ -2109,152 +1410,146 @@ function renderCash(){
 
 function renderExpenses(){
 
-  const records =
-    currentExpenses();
+  const daily=
+    getDaily("expenses");
 
 
-  document
-    .getElementById(
-      "expenseEditor"
-    )
-    .innerHTML = `
+  document.getElementById(
+    "expenseEditor"
+  ).innerHTML=`
 
-    <div class="editor-table">
+  <div class="editor-table">
 
-    <table>
+  <table>
 
-    <thead>
+  <thead>
 
-    <tr>
+  <tr>
 
-      <th>Paid To</th>
+    <th>Paid To</th>
+    <th>Expense Type</th>
+    <th>Amount</th>
+    <th>Paid By</th>
+    <th></th>
 
-      <th>Expense Type</th>
+  </tr>
 
-      <th>Amount</th>
-
-      <th>Paid By</th>
-
-      <th></th>
-
-    </tr>
-
-    </thead>
-
-    <tbody>
-
-    ${
-      records.map(
-        r=>{
-
-          const i =
-            state.expenses.indexOf(r);
+  </thead>
 
 
-          return `
+  <tbody>
 
-          <tr>
+  ${
+    daily.map(r=>{
 
-            <td>
-              <input
-                value="${esc(r.paidTo)}"
-                onchange="
-                  updateArray(
-                    'expenses',
-                    ${i},
-                    'paidTo',
-                    this.value
-                  )
-                "
-              >
-            </td>
+      const i=
+        state.expenses.indexOf(r);
 
+      return `
 
-            <td>
-              <input
-                value="${esc(r.type)}"
-                onchange="
-                  updateArray(
-                    'expenses',
-                    ${i},
-                    'type',
-                    this.value
-                  )
-                "
-              >
-            </td>
+      <tr>
+
+      <td>
+
+        <input
+          value="${esc(r.paidTo)}"
+          onchange="
+            updateArray(
+              'expenses',
+              ${i},
+              'paidTo',
+              this.value
+            )
+          "
+        >
+
+      </td>
 
 
-            <td>
-              <input
-                type="number"
-                step="0.01"
-                value="${r.amount}"
-                onchange="
-                  updateArray(
-                    'expenses',
-                    ${i},
-                    'amount',
-                    num(this.value)
-                  )
-                "
-              >
-            </td>
+      <td>
+
+        <input
+          value="${esc(r.type)}"
+          onchange="
+            updateArray(
+              'expenses',
+              ${i},
+              'type',
+              this.value
+            )
+          "
+        >
+
+      </td>
 
 
-            <td>
-              <input
-                value="${esc(r.paidBy)}"
-                onchange="
-                  updateArray(
-                    'expenses',
-                    ${i},
-                    'paidBy',
-                    this.value
-                  )
-                "
-              >
-            </td>
+      <td>
+
+        <input
+          type="number"
+          step="0.01"
+          value="${r.amount}"
+          onchange="
+            updateArray(
+              'expenses',
+              ${i},
+              'amount',
+              num(this.value)
+            )
+          "
+        >
+
+      </td>
 
 
-            <td>
+      <td>
 
-              <button
-                class="delete-btn"
-                onclick="
-                  del(
-                    'expenses',
-                    ${i}
-                  )
-                "
-              >
-                Delete
-              </button>
+        <input
+          value="${esc(r.paidBy)}"
+          onchange="
+            updateArray(
+              'expenses',
+              ${i},
+              'paidBy',
+              this.value
+            )
+          "
+        >
 
-            </td>
+      </td>
 
-          </tr>
 
-          `;
+      <td>
 
-        }
-      ).join("")
-    }
+        <button
+          class="delete-btn"
+          onclick="
+            del('expenses',${i})
+          "
+        >
+          Delete
+        </button>
 
-    ${
-      records.length
-        ? ""
-        : emptyRow(
-            5,
-            `No expenses for ${formatDate(selectedDate())}`
-          )
-    }
+      </td>
 
-    </tbody>
+      </tr>
 
-    </table>
+      `;
 
-    </div>
+    }).join("")
+  }
+
+  ${
+    daily.length
+      ? ""
+      : emptyRow(5)
+  }
+
+  </tbody>
+
+  </table>
+
+  </div>
 
   `;
 
@@ -2267,172 +1562,165 @@ function renderExpenses(){
 
 function renderBank(){
 
-  const records =
-    currentBank();
+  const daily=
+    getDaily("bank");
 
 
-  document
-    .getElementById(
-      "bankEditor"
-    )
-    .innerHTML = `
+  document.getElementById(
+    "bankEditor"
+  ).innerHTML=`
 
-    <div class="editor-table">
+  <div class="editor-table">
 
-    <table>
+  <table>
 
-    <thead>
+  <thead>
 
-    <tr>
+  <tr>
 
-      <th>Received On</th>
+    <th>Received On</th>
+    <th>Reference</th>
+    <th>From Whom</th>
+    <th>Amount</th>
+    <th>Remarks</th>
+    <th></th>
 
-      <th>Reference</th>
+  </tr>
 
-      <th>From Whom</th>
-
-      <th>Amount</th>
-
-      <th>Remarks</th>
-
-      <th></th>
-
-    </tr>
-
-    </thead>
-
-    <tbody>
-
-    ${
-      records.map(
-        r=>{
-
-          const i =
-            state.bank.indexOf(r);
+  </thead>
 
 
-          return `
+  <tbody>
 
-          <tr>
+  ${
+    daily.map(r=>{
 
-            <td>
+      const i=
+        state.bank.indexOf(r);
 
-              <input
-                type="date"
-                value="${r.date}"
-                onchange="
-                  updateArray(
-                    'bank',
-                    ${i},
-                    'date',
-                    this.value
-                  )
-                "
-              >
+      return `
 
-            </td>
+      <tr>
 
+      <td>
 
-            <td>
-              <input
-                value="${esc(r.reference)}"
-                onchange="
-                  updateArray(
-                    'bank',
-                    ${i},
-                    'reference',
-                    this.value
-                  )
-                "
-              >
-            </td>
+        <input
+          type="date"
+          value="${r.date}"
+          onchange="
+            updateArray(
+              'bank',
+              ${i},
+              'date',
+              this.value
+            )
+          "
+        >
+
+      </td>
 
 
-            <td>
-              <input
-                value="${esc(r.from)}"
-                onchange="
-                  updateArray(
-                    'bank',
-                    ${i},
-                    'from',
-                    this.value
-                  )
-                "
-              >
-            </td>
+      <td>
+
+        <input
+          value="${esc(r.reference)}"
+          onchange="
+            updateArray(
+              'bank',
+              ${i},
+              'reference',
+              this.value
+            )
+          "
+        >
+
+      </td>
 
 
-            <td>
-              <input
-                type="number"
-                step="0.01"
-                value="${r.amount}"
-                onchange="
-                  updateArray(
-                    'bank',
-                    ${i},
-                    'amount',
-                    num(this.value)
-                  )
-                "
-              >
-            </td>
+      <td>
+
+        <input
+          value="${esc(r.from)}"
+          onchange="
+            updateArray(
+              'bank',
+              ${i},
+              'from',
+              this.value
+            )
+          "
+        >
+
+      </td>
 
 
-            <td>
-              <input
-                value="${esc(r.remarks)}"
-                onchange="
-                  updateArray(
-                    'bank',
-                    ${i},
-                    'remarks',
-                    this.value
-                  )
-                "
-              >
-            </td>
+      <td>
+
+        <input
+          type="number"
+          step="0.01"
+          value="${r.amount}"
+          onchange="
+            updateArray(
+              'bank',
+              ${i},
+              'amount',
+              num(this.value)
+            )
+          "
+        >
+
+      </td>
 
 
-            <td>
+      <td>
 
-              <button
-                class="delete-btn"
-                onclick="
-                  del(
-                    'bank',
-                    ${i}
-                  )
-                "
-              >
-                Delete
-              </button>
+        <input
+          value="${esc(r.remarks)}"
+          onchange="
+            updateArray(
+              'bank',
+              ${i},
+              'remarks',
+              this.value
+            )
+          "
+        >
 
-            </td>
+      </td>
 
-          </tr>
 
-          `;
+      <td>
 
-        }
-      ).join("")
-    }
+        <button
+          class="delete-btn"
+          onclick="
+            del('bank',${i})
+          "
+        >
+          Delete
+        </button>
 
-    ${
-      records.length
-        ? ""
-        : emptyRow(
-            6,
-            `No bank transfers for ${formatDate(selectedDate())}`
-          )
-    }
+      </td>
 
-    </tbody>
+      </tr>
 
-    </table>
+      `;
 
-    </div>
+    }).join("")
+  }
+
+  ${
+    daily.length
+      ? ""
+      : emptyRow(6)
+  }
+
+  </tbody>
+
+  </table>
+
+  </div>
 
   `;
 
@@ -2445,212 +1733,184 @@ function renderBank(){
 
 function renderPetty(){
 
-  const date =
+  const date=
     selectedDate();
 
 
-  ensurePettyDate(date);
+  document.getElementById(
+    "pettyEditor"
+  ).innerHTML=`
+
+  <div class="editor-table">
+
+  <table>
+
+  <thead>
+
+  <tr>
+
+    <th>Holder</th>
+    <th>Opening</th>
+    <th>Received</th>
+    <th>Expenses</th>
+    <th>Closing</th>
+    <th>Status</th>
+
+  </tr>
+
+  </thead>
 
 
-  const records =
-    state.pettyDaily[date];
+  <tbody>
+
+  ${
+    state.petty.map((r,i)=>{
+
+      const figures=
+        pettyFigures(r,date);
 
 
-  document
-    .getElementById(
-      "pettyEditor"
-    )
-    .innerHTML = `
+      return `
 
-    <div class="editor-table">
+      <tr>
 
-    <table>
-
-    <thead>
-
-    <tr>
-
-      <th>Holder</th>
-
-      <th>Opening</th>
-
-      <th>Received</th>
-
-      <th>Expenses</th>
-
-      <th>Closing</th>
-
-      <th>Status</th>
-
-    </tr>
-
-    </thead>
-
-    <tbody>
-
-    ${
-      records.map(
-        (r,i)=>{
-
-          const figures =
-            pettyFigures(
-              r,
-              date
-            );
+        <td>
+          <b>${esc(r.holder)}</b>
+        </td>
 
 
-          const previous =
-            getPreviousPettyRecord(
-              r.holder,
-              date
-            );
+        <td>
 
-
-          /*
-            If previous day exists, opening is automatic.
-            Otherwise the first day's opening can be entered.
-          */
-
-          const openingHTML =
-            previous
-
-              ? `
-                <input
-                  type="number"
-                  step="0.01"
-                  value="${figures.opening}"
-                  readonly
-                  title="Automatically carried forward from the previous day's closing balance"
-                >
-              `
-
-              : `
-                <input
-                  type="number"
-                  step="0.01"
-                  value="${r.opening}"
-                  onchange="
-                    updatePettyOpening(
-                      ${i},
-                      this.value
-                    )
-                  "
-                  title="Enter opening balance for the first day"
-                >
-              `;
-
-
-          return `
-
-          <tr>
-
-            <td>
-              <b>
-                ${esc(r.holder)}
-              </b>
-            </td>
-
-
-            <td>
-
-              ${openingHTML}
-
-            </td>
-
-
-            <td>
-
-              <input
-                type="number"
-                step="0.01"
-                value="${figures.received}"
-                readonly
-                title="Automatically includes cash received by this holder for ${formatDate(date)}"
-              >
-
-            </td>
-
-
-            <td>
-
-              <input
-                type="number"
-                step="0.01"
-                value="${figures.expenses}"
-                readonly
-                title="Automatically includes expenses paid by this holder for ${formatDate(date)}"
-              >
-
-            </td>
-
-
-            <td>
-
-              <b>
-                ${money(figures.closing)}
-              </b>
-
-            </td>
-
-
-            <td>
-
-              <select
-                class="status-select ${
-                  r.active
-                    ? "status-active"
-                    : "status-inactive"
-                }"
-                onchange="
-                  setPettyStatus(
+          <input
+            type="number"
+            step="0.01"
+            value="${figures.opening}"
+            ${
+              date===state.date
+              ? `onchange="
+                  updateBaseOpening(
                     ${i},
-                    this.value
+                    num(this.value)
                   )
-                "
-              >
+                "`
+              : "readonly"
+            }
+            title="${
+              date===state.date
+                ? "Initial/base opening balance"
+                : "Automatically carried forward from previous days"
+            }"
+          >
 
-                <option
-                  value="active"
-                  ${
-                    r.active
-                      ? "selected"
-                      : ""
-                  }
-                >
-                  Active
-                </option>
+        </td>
 
 
-                <option
-                  value="inactive"
-                  ${
-                    !r.active
-                      ? "selected"
-                      : ""
-                  }
-                >
-                  Inactive
-                </option>
+        <td>
 
-              </select>
+          <input
+            type="number"
+            step="0.01"
+            value="${figures.received}"
+            readonly
+            title="Automatically includes cash received by this holder"
+          >
 
-            </td>
+        </td>
 
-          </tr>
 
-          `;
+        <td>
 
-        }
-      ).join("")
-    }
+          <input
+            type="number"
+            step="0.01"
+            value="${figures.expenses}"
+            readonly
+            title="Automatically includes expenses paid by this holder"
+          >
 
-    </tbody>
+        </td>
 
-    </table>
 
-    </div>
+        <td>
 
-    `;
+          <b>
+            ${money(figures.closing)}
+          </b>
+
+        </td>
+
+
+        <td>
+
+          <select
+            class="status-select ${
+              r.active
+                ? "status-active"
+                : "status-inactive"
+            }"
+            onchange="
+              setPettyStatus(
+                ${i},
+                this.value
+              )
+            "
+          >
+
+            <option
+              value="active"
+              ${r.active?"selected":""}
+            >
+              Active
+            </option>
+
+            <option
+              value="inactive"
+              ${!r.active?"selected":""}
+            >
+              Inactive
+            </option>
+
+          </select>
+
+        </td>
+
+      </tr>
+
+      `;
+
+    }).join("")
+  }
+
+  </tbody>
+
+  </table>
+
+  </div>
+
+  `;
+
+}
+
+
+/* =====================================================
+   UPDATE BASE OPENING
+   ===================================================== */
+
+function updateBaseOpening(i,value){
+
+  if(!state.petty[i]) return;
+
+  state.petty[i].baseOpening=
+    num(value);
+
+  /*
+    Keep old opening field synchronized for compatibility.
+  */
+
+  state.petty[i].opening=
+    num(value);
+
+  save();
 
 }
 
@@ -2659,14 +1919,18 @@ function renderPetty(){
    GENERIC PREVIEW ROWS
    ===================================================== */
 
-function rows(
-  records,
+function rowsDaily(
+  type,
   fn,
   cols
 ){
 
-  return records.length
-    ? records.map(fn).join("")
+  const daily=
+    getDaily(type);
+
+
+  return daily.length
+    ? daily.map(fn).join("")
     : emptyRow(cols);
 
 }
@@ -2678,215 +1942,131 @@ function rows(
 
 function renderPreview(){
 
-  const date =
+  const date=
     selectedDate();
 
 
   /*
-    ---------------------------------------------------
-    CURRENT DAY RECORDS ONLY
-    ---------------------------------------------------
+    Only transactions belonging to the selected date
+    are included in the report.
   */
 
-  const jobs =
-    currentJobs();
+  const dailyCash=
+    getDaily("cash");
 
-  const cash =
-    currentCash();
+  const dailyBank=
+    getDaily("bank");
 
-  const expenses =
-    currentExpenses();
-
-  const bank =
-    currentBank();
+  const dailyExpenses=
+    getDaily("expenses");
 
 
-  /*
-    ---------------------------------------------------
-    TOTAL CASH
-    ---------------------------------------------------
-  */
-
-  const cashTotal =
-    cash.reduce(
-      (a,r)=>
-        a + num(r.amount),
+  const cashTotal=
+    dailyCash.reduce(
+      (a,r)=>a+num(r.amount),
       0
     );
 
 
-  /*
-    ---------------------------------------------------
-    TOTAL BANK
-    ---------------------------------------------------
-  */
-
-  const bankTotal =
-    bank.reduce(
-      (a,r)=>
-        a + num(r.amount),
+  const bankTotal=
+    dailyBank.reduce(
+      (a,r)=>a+num(r.amount),
       0
     );
 
 
-  /*
-    ---------------------------------------------------
-    TOTAL EXPENSES
-    ---------------------------------------------------
-  */
-
-  const expenseTotal =
-    expenses.reduce(
-      (a,r)=>
-        a + num(r.amount),
+  const expenseTotal=
+    dailyExpenses.reduce(
+      (a,r)=>a+num(r.amount),
       0
     );
 
 
-  /*
-    ---------------------------------------------------
-    PETTY CASH
-    ---------------------------------------------------
-  */
-
-  const pettyRecords =
-    currentPetty();
-
-
-  const active =
-    pettyRecords.filter(
-      r => r.active
-    );
-
-
-  const inactive =
-    pettyRecords.filter(
-      r => !r.active
-    );
-
-
-  const pettyTotal =
-    active.reduce(
-      (a,r)=>
-        a +
-        pettyFigures(
-          r,
-          date
-        ).closing,
-      0
-    );
+  const pettyTotal=
+    state.petty
+      .filter(r=>r.active)
+      .reduce(
+        (a,r)=>
+          a+pettyFigures(r,date).closing,
+        0
+      );
 
 
   /*
-    ---------------------------------------------------
-    SUMMARY CARDS
-    ---------------------------------------------------
+    Dashboard totals.
   */
 
-  document
-    .getElementById(
-      "sumCash"
-    )
-    .textContent =
-      money(cashTotal);
+  document.getElementById(
+    "sumCash"
+  ).textContent=
+    money(cashTotal);
 
 
-  document
-    .getElementById(
-      "sumBank"
-    )
-    .textContent =
-      money(bankTotal);
+  document.getElementById(
+    "sumBank"
+  ).textContent=
+    money(bankTotal);
 
 
-  document
-    .getElementById(
-      "sumExpenses"
-    )
-    .textContent =
-      money(expenseTotal);
+  document.getElementById(
+    "sumExpenses"
+  ).textContent=
+    money(expenseTotal);
 
 
-  document
-    .getElementById(
-      "sumPetty"
-    )
-    .textContent =
-      money(pettyTotal);
+  document.getElementById(
+    "sumPetty"
+  ).textContent=
+    money(pettyTotal);
 
 
-  /*
-    ---------------------------------------------------
-    PAPER SUMMARY
-    ---------------------------------------------------
-  */
-
-  document
-    .getElementById(
-      "paperCash"
-    )
-    .textContent =
-      money(cashTotal)
-        .replace("AED ","");
+  document.getElementById(
+    "paperCash"
+  ).textContent=
+    money(cashTotal)
+      .replace("AED ","");
 
 
-  document
-    .getElementById(
-      "paperBank"
-    )
-    .textContent =
-      money(bankTotal)
-        .replace("AED ","");
+  document.getElementById(
+    "paperBank"
+  ).textContent=
+    money(bankTotal)
+      .replace("AED ","");
 
 
-  document
-    .getElementById(
-      "paperExpenses"
-    )
-    .textContent =
-      money(expenseTotal)
-        .replace("AED ","");
+  document.getElementById(
+    "paperExpenses"
+  ).textContent=
+    money(expenseTotal)
+      .replace("AED ","");
 
 
-  document
-    .getElementById(
-      "paperPetty"
-    )
-    .textContent =
-      money(pettyTotal)
-        .replace("AED ","");
+  document.getElementById(
+    "paperPetty"
+  ).textContent=
+    money(pettyTotal)
+      .replace("AED ","");
 
 
-  /*
-    ---------------------------------------------------
-    JOBS PREVIEW
-    ---------------------------------------------------
-  */
+  /* =================================================
+     JOBS
+     ================================================= */
 
-  document
-    .querySelector(
-      "#jobsPreview tbody"
-    )
-    .innerHTML =
+  document.querySelector(
+    "#jobsPreview tbody"
+  ).innerHTML=
 
-    rows(
-      jobs,
-
+    rowsDaily(
+      "jobs",
       r=>`
 
         <tr>
 
-          <td>
-            ${esc(r.jobNo)}
-          </td>
+          <td>${esc(r.jobNo)}</td>
 
-          <td>
-            ${esc(r.client)}
-          </td>
+          <td>${esc(r.client)}</td>
 
-          <td>
-            ${esc(r.description)}
-          </td>
+          <td>${esc(r.description)}</td>
 
           <td class="num">
             ${num(r.total).toFixed(2)}
@@ -2896,252 +2076,190 @@ function renderPreview(){
             ${num(r.cash).toFixed(2)}
           </td>
 
-          <td>
-            ${esc(r.incharge)}
-          </td>
+          <td>${esc(r.incharge)}</td>
 
-          <td>
-            ${esc(r.status)}
-          </td>
+          <td>${esc(r.status)}</td>
 
         </tr>
 
       `,
-
       7
-
     );
 
 
-  /*
-    ---------------------------------------------------
-    CASH PREVIEW
-    ---------------------------------------------------
-  */
+  /* =================================================
+     CASH
+     ================================================= */
 
-  document
-    .querySelector(
-      "#cashPreview tbody"
-    )
-    .innerHTML =
+  document.querySelector(
+    "#cashPreview tbody"
+  ).innerHTML=
 
-    rows(
-      cash,
-
+    rowsDaily(
+      "cash",
       r=>`
 
         <tr>
 
-          <td>
-            ${esc(r.from)}
-          </td>
+          <td>${esc(r.from)}</td>
 
-          <td>
-            ${esc(r.jobNo)}
-          </td>
+          <td>${esc(r.jobNo)}</td>
 
           <td class="num">
             ${num(r.amount).toFixed(2)}
           </td>
 
-          <td>
-            ${esc(r.receivedBy)}
-          </td>
+          <td>${esc(r.receivedBy)}</td>
 
         </tr>
 
       `,
-
       4
-
     );
 
 
-  /*
-    ---------------------------------------------------
-    EXPENSE PREVIEW
-    ---------------------------------------------------
-  */
+  /* =================================================
+     EXPENSES
+     ================================================= */
 
-  document
-    .querySelector(
-      "#expensePreview tbody"
-    )
-    .innerHTML =
+  document.querySelector(
+    "#expensePreview tbody"
+  ).innerHTML=
 
-    rows(
-      expenses,
-
+    rowsDaily(
+      "expenses",
       r=>`
 
         <tr>
 
-          <td>
-            ${esc(r.paidTo)}
-          </td>
+          <td>${esc(r.paidTo)}</td>
 
-          <td>
-            ${esc(r.type)}
-          </td>
+          <td>${esc(r.type)}</td>
 
           <td class="num">
             ${num(r.amount).toFixed(2)}
           </td>
 
-          <td>
-            ${esc(r.paidBy)}
-          </td>
+          <td>${esc(r.paidBy)}</td>
 
         </tr>
 
       `,
-
       4
-
     );
 
 
-  /*
-    ---------------------------------------------------
-    BANK PREVIEW
-    ---------------------------------------------------
-  */
+  /* =================================================
+     BANK
+     ================================================= */
 
-  document
-    .querySelector(
-      "#bankPreview tbody"
-    )
-    .innerHTML =
+  document.querySelector(
+    "#bankPreview tbody"
+  ).innerHTML=
 
-    rows(
-      bank,
-
+    rowsDaily(
+      "bank",
       r=>`
 
         <tr>
 
-          <td>
-            ${formatDate(r.date)}
-          </td>
+          <td>${formatDate(r.date)}</td>
 
-          <td>
-            ${esc(r.reference)}
-          </td>
+          <td>${esc(r.reference)}</td>
 
-          <td>
-            ${esc(r.from)}
-          </td>
+          <td>${esc(r.from)}</td>
 
           <td class="num">
             ${num(r.amount).toFixed(2)}
           </td>
 
-          <td>
-            ${esc(r.remarks)}
-          </td>
+          <td>${esc(r.remarks)}</td>
 
         </tr>
 
       `,
-
       5
-
     );
 
 
-  /*
-    ---------------------------------------------------
-    PETTY CASH ROWS
-    ---------------------------------------------------
-  */
+  /* =================================================
+     PETTY CASH
+     ================================================= */
 
-  const pettyRows =
-    r=>{
-
-      const figures =
-        pettyFigures(
-          r,
-          date
-        );
+  const active=
+    state.petty.filter(
+      r=>r.active
+    );
 
 
-      return `
-
-        <tr>
-
-          <td>
-            ${esc(r.holder)}
-          </td>
-
-          <td class="num">
-            ${figures.opening.toFixed(2)}
-          </td>
-
-          <td class="num">
-            ${figures.received.toFixed(2)}
-          </td>
-
-          <td class="num">
-            ${figures.expenses.toFixed(2)}
-          </td>
-
-          <td class="num">
-            ${figures.closing.toFixed(2)}
-          </td>
-
-        </tr>
-
-      `;
-
-    };
+  const inactive=
+    state.petty.filter(
+      r=>!r.active
+    );
 
 
-  /*
-    Active petty cash.
-  */
+  const pettyRows=r=>{
 
-  document
-    .querySelector(
-      "#pettyPreview tbody"
-    )
-    .innerHTML =
+    const figures=
+      pettyFigures(
+        r,
+        date
+      );
+
+
+    return `
+
+      <tr>
+
+        <td>
+          ${esc(r.holder)}
+        </td>
+
+        <td class="num">
+          ${figures.opening.toFixed(2)}
+        </td>
+
+        <td class="num">
+          ${figures.received.toFixed(2)}
+        </td>
+
+        <td class="num">
+          ${figures.expenses.toFixed(2)}
+        </td>
+
+        <td class="num">
+          ${figures.closing.toFixed(2)}
+        </td>
+
+      </tr>
+
+    `;
+
+  };
+
+
+  document.querySelector(
+    "#pettyPreview tbody"
+  ).innerHTML=
 
     active.length
-      ? active
-          .map(pettyRows)
-          .join("")
+      ? active.map(pettyRows).join("")
       : emptyRow(5);
 
 
-  /*
-    Inactive petty cash.
-  */
-
-  document
-    .querySelector(
-      "#inactivePreview tbody"
-    )
-    .innerHTML =
+  document.querySelector(
+    "#inactivePreview tbody"
+  ).innerHTML=
 
     inactive.length
-      ? inactive
-          .map(pettyRows)
-          .join("")
+      ? inactive.map(pettyRows).join("")
       : emptyRow(5);
 
 
-  /*
-    ---------------------------------------------------
-    MANAGEMENT REMARKS
-    ---------------------------------------------------
-  */
-
-  document
-    .getElementById(
-      "remarksPreview"
-    )
-    .textContent =
-      getRemarks(date) || "";
+  document.getElementById(
+    "remarksPreview"
+  ).textContent=
+    state.remarks||"";
 
 }
 
@@ -3151,13 +2269,6 @@ function renderPreview(){
    ===================================================== */
 
 function renderAll(){
-
-  const date =
-    selectedDate();
-
-
-  ensurePettyDate(date);
-
 
   renderJobs();
 
@@ -3172,40 +2283,16 @@ function renderAll(){
   renderPreview();
 
 
-  /*
-    Keep calendar synchronized.
-  */
-
-  const dateInput =
-    document.getElementById(
-      "reportDate"
-    );
+  document.getElementById(
+    "reportDate"
+  ).value=
+    state.date;
 
 
-  if(dateInput){
-
-    dateInput.value =
-      state.date;
-
-  }
-
-
-  /*
-    Update remarks for selected date.
-  */
-
-  const remarksInput =
-    document.getElementById(
-      "remarksInput"
-    );
-
-
-  if(remarksInput){
-
-    remarksInput.value =
-      getRemarks(date);
-
-  }
+  document.getElementById(
+    "remarksInput"
+  ).value=
+    state.remarks;
 
 }
 
@@ -3214,118 +2301,69 @@ function renderAll(){
    PRINT
    ===================================================== */
 
-function printSelected(
-  sections
-){
+function printSelected(sections){
 
   /*
-    Always refresh the report using the currently
-    selected dashboard date before printing.
+    Make absolutely sure the printed report uses the
+    date currently selected in the Dashboard calendar.
   */
 
-  const date =
+  const date=
     selectedDate();
 
 
-  /*
-    Keep state synchronized with calendar.
-  */
+  state.date=date;
 
-  state.date =
-    date;
-
-
-  /*
-    Make sure the selected date has petty records.
-  */
-
-  ensurePettyDate(date);
-
-
-  /*
-    Re-render the report.
-  */
 
   renderPreview();
 
 
-  const all = [
+  const all=[
 
     "summary",
-
     "jobs",
-
     "cash",
-
     "expenses",
-
     "bank",
-
     "petty",
-
     "inactive",
-
     "remarks"
 
   ];
 
 
-  const map = {
+  const map={
 
-    summary:
-      ".mini-summary",
+    summary:".mini-summary",
 
-    jobs:
-      ".report-block:nth-of-type(1)",
+    jobs:".report-block:nth-of-type(1)",
 
-    cash:
-      ".report-block:nth-of-type(2)",
+    cash:".report-block:nth-of-type(2)",
 
-    expenses:
-      ".report-block:nth-of-type(3)",
+    expenses:".report-block:nth-of-type(3)",
 
-    bank:
-      ".report-block:nth-of-type(4)",
+    bank:".report-block:nth-of-type(4)",
 
-    petty:
-      ".report-block:nth-of-type(5)",
+    petty:".report-block:nth-of-type(5)",
 
-    inactive:
-      ".report-block:nth-of-type(6)",
+    inactive:".report-block:nth-of-type(6)",
 
-    remarks:
-      ".report-block:nth-of-type(7)"
+    remarks:".report-block:nth-of-type(7)"
 
   };
 
 
   /*
-    ---------------------------------------------------
-    REPORT DATE
-    ---------------------------------------------------
-
-    This is the important print-date fix.
-
-    It uses the Dashboard calendar date.
-
-    Example:
-
-    Calendar = 21/08/2026
-
-    Printed report =
-    21/08/2026
-
-    Even if today's computer date is
-    22/08/2026 or 25/08/2026.
+    Add selected date to report heading.
   */
 
-  const reportTitle =
+  const reportTitle=
     document.querySelector(
       ".report-title"
     );
 
 
-  const originalTitle =
+  const originalTitle=
     reportTitle
       ? reportTitle.innerHTML
       : "";
@@ -3333,7 +2371,7 @@ function printSelected(
 
   if(reportTitle){
 
-    reportTitle.innerHTML =
+    reportTitle.innerHTML=
       `SUMMARY DASHBOARD
        <span class="print-report-date">
          — ${formatDate(date)}
@@ -3343,83 +2381,69 @@ function printSelected(
 
 
   /*
-    ---------------------------------------------------
-    SHOW/HIDE PRINT SECTIONS
-    ---------------------------------------------------
+    Hide sections not selected.
   */
 
-  all.forEach(
-    section=>{
+  all.forEach(s=>{
 
-      const el =
-        document.querySelector(
-          map[section]
-        );
+    const el=
+      document.querySelector(
+        map[s]
+      );
 
 
-      if(el){
+    if(el){
 
-        el.classList.toggle(
-          "hidden-print",
-          !sections.includes(
-            section
-          )
-        );
-
-      }
+      el.classList.toggle(
+        "hidden-print",
+        !sections.includes(s)
+      );
 
     }
-  );
+
+  });
 
 
   /*
-    ---------------------------------------------------
-    PRINT
-    ---------------------------------------------------
+    Print.
   */
 
   window.print();
 
 
   /*
-    ---------------------------------------------------
-    RESTORE SCREEN
-    ---------------------------------------------------
+    Restore normal screen after printing.
   */
 
-  setTimeout(
-    ()=>{
+  setTimeout(()=>{
 
-      all.forEach(
-        section=>{
+    all.forEach(s=>{
 
-          const el =
-            document.querySelector(
-              map[section]
-            );
+      const el=
+        document.querySelector(
+          map[s]
+        );
 
 
-          if(el){
+      if(el){
 
-            el.classList.remove(
-              "hidden-print"
-            );
-
-          }
-
-        }
-      );
-
-
-      if(reportTitle){
-
-        reportTitle.innerHTML =
-          originalTitle;
+        el.classList.remove(
+          "hidden-print"
+        );
 
       }
 
-    },
-    500
-  );
+    });
+
+
+    if(reportTitle){
+
+      reportTitle.innerHTML=
+        originalTitle;
+
+    }
+
+  },500);
 
 }
+

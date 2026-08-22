@@ -1,2298 +1,862 @@
-const KEY="alJefoonDailyExpenseReportV1";
-
-const holders=[
-  {name:"Ali",active:true},
-  {name:"Saud",active:true},
-  {name:"Zohaib",active:true},
-  {name:"Fahad",active:true},
-  {name:"Ihsan",active:true},
-  {name:"Parvaiz",active:false},
-  {name:"Malik",active:false}
-];
-
-let state=load();
-
-
 /* =====================================================
-   DATE HELPERS
+   AL JEFOON TENTS
+   DAILY EXPENSE REPORT
+   STYLE.CSS
    ===================================================== */
 
-function todayString(){
-  const d=new Date();
-  const y=d.getFullYear();
-  const m=String(d.getMonth()+1).padStart(2,"0");
-  const day=String(d.getDate()).padStart(2,"0");
-
-  return `${y}-${m}-${day}`;
-}
-
-function formatDate(date){
-
-  if(!date) return "";
-
-  const parts=String(date).split("-");
-
-  if(parts.length!==3) return date;
-
-  return `${parts[2]}/${parts[1]}/${parts[0]}`;
-}
-
-function dateValue(date){
-  return String(date||"");
-}
-
 
 /* =====================================================
-   DEFAULT STATE
+   GLOBAL
    ===================================================== */
 
-function defaultState(){
+*{
+  box-sizing:border-box;
+}
 
-  return {
-    date:todayString(),
-
-    jobs:[],
-    cash:[],
-    expenses:[],
-    bank:[],
-
-    petty:holders.map(h=>({
-      holder:h.name,
-
-      /*
-        baseOpening is the ORIGINAL opening balance.
-        Future days automatically use the previous day's
-        closing balance.
-      */
-      baseOpening:0,
-
-      /*
-        Keep old opening field for compatibility with
-        existing saved data.
-      */
-      opening:0,
-
-      received:0,
-      expenses:0,
-
-      active:h.active
-    })),
-
-    remarks:""
-  };
+body{
+  margin:0;
+  font-family:Arial,Helvetica,sans-serif;
+  background:#f4f5f7;
+  color:#171717;
+  transition:
+    background-color .2s ease,
+    color .2s ease;
 }
 
 
 /* =====================================================
-   LOAD
+   SIDEBAR
    ===================================================== */
 
-function load(){
+.sidebar{
+  position:fixed;
+  left:0;
+  top:0;
+  bottom:0;
+  width:235px;
+  background:#000;
+  color:#fff;
+  padding:25px 15px;
+  display:flex;
+  flex-direction:column;
+  z-index:5;
+}
 
-  try{
+.brand{
+  text-align:center;
+  padding:10px 0 28px;
+  border-bottom:1px solid #2b2b2b;
+  margin-bottom:20px;
+}
 
-    const saved=JSON.parse(
-      localStorage.getItem(KEY)
-    );
+.brand-name{
+  font-size:18px;
+  font-weight:800;
+  letter-spacing:1px;
+}
 
-    const base=defaultState();
+.brand-sub{
+  font-size:15px;
+  font-weight:bold;
+  letter-spacing:5px;
+  color:#fcc224;
+}
 
-    if(!saved) return base;
+nav{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
 
+.nav-btn{
+  background:transparent;
+  border:0;
+  color:#ddd;
+  text-align:left;
+  padding:13px 14px;
+  border-radius:6px;
+  font-weight:bold;
+  cursor:pointer;
+  font-size:14px;
+}
 
-    /* Arrays */
+.nav-btn:hover,
+.nav-btn.active{
+  background:#fcc224;
+  color:#000;
+}
 
-    saved.cash=Array.isArray(saved.cash)
-      ? saved.cash
-      : [];
+.sidebar-bottom{
+  margin-top:auto;
+  display:grid;
+  gap:8px;
+}
 
-    saved.expenses=Array.isArray(saved.expenses)
-      ? saved.expenses
-      : [];
+.yellow-btn,
+.dark-btn,
+.add-btn{
+  border:0;
+  border-radius:6px;
+  padding:12px 16px;
+  font-weight:bold;
+  cursor:pointer;
+}
 
-    saved.jobs=Array.isArray(saved.jobs)
-      ? saved.jobs
-      : [];
+.yellow-btn{
+  background:#fcc224;
+  color:#000;
+}
 
-    saved.bank=Array.isArray(saved.bank)
-      ? saved.bank
-      : [];
+.dark-btn{
+  background:#222;
+  color:#fff;
+  border:1px solid #444;
+}
 
-    saved.petty=Array.isArray(saved.petty)
-      ? saved.petty
-      : base.petty;
-
-
-    /* Date */
-
-    saved.date=saved.date||base.date;
-
-    saved.remarks=saved.remarks||"";
-
-
-    /* =================================================
-       MIGRATE OLD PETTY CASH DATA
-       ================================================= */
-
-    saved.petty.forEach(p=>{
-
-      if(typeof p.baseOpening==="undefined"){
-
-        p.baseOpening=num(
-          typeof p.opening!=="undefined"
-            ? p.opening
-            : 0
-        );
-
-      }
-
-      if(typeof p.opening==="undefined"){
-        p.opening=p.baseOpening;
-      }
-
-      if(typeof p.received==="undefined"){
-        p.received=0;
-      }
-
-      if(typeof p.expenses==="undefined"){
-        p.expenses=0;
-      }
-
-      p.active=
-        typeof p.active==="boolean"
-          ? p.active
-          : true;
-
-    });
-
-
-    /* =================================================
-       ADD MISSING HOLDERS
-       ================================================= */
-
-    holders.forEach(h=>{
-
-      const exists=saved.petty.some(
-        p=>
-          normalizeName(p.holder)
-          ===
-          normalizeName(h.name)
-      );
-
-      if(!exists){
-
-        saved.petty.push({
-          holder:h.name,
-          baseOpening:0,
-          opening:0,
-          received:0,
-          expenses:0,
-          active:h.active
-        });
-
-      }
-
-    });
-
-
-    /*
-      Existing transactions from the old version did not
-      have a date.
-
-      Assign them to the saved report date so they do not
-      disappear after the new date filtering is enabled.
-    */
-
-    saved.cash.forEach(r=>{
-      if(!r.date){
-        r.date=saved.date;
-      }
-    });
-
-    saved.expenses.forEach(r=>{
-      if(!r.date){
-        r.date=saved.date;
-      }
-    });
-
-    saved.jobs.forEach(r=>{
-      if(!r.date){
-        r.date=saved.date;
-      }
-    });
-
-    saved.bank.forEach(r=>{
-      if(!r.date){
-        r.date=saved.date;
-      }
-    });
-
-
-    return saved;
-
-  }catch(e){
-
-    console.error("Load error:",e);
-
-    return defaultState();
-  }
+.dark-btn:hover{
+  background:#333;
 }
 
 
 /* =====================================================
-   SAVE
+   MAIN
    ===================================================== */
 
-function save(){
+.main{
+  margin-left:235px;
+  padding:28px;
+  min-height:100vh;
+}
 
-  localStorage.setItem(
-    KEY,
-    JSON.stringify(state)
-  );
+.topbar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:25px;
+}
 
-  renderAll();
+.topbar h1{
+  margin:0;
+  font-size:28px;
+}
+
+.topbar p{
+  margin:6px 0 0;
+  color:#666;
+}
+
+.date-box{
+  background:#fff;
+  padding:10px 14px;
+  border:1px solid #ddd;
+  border-radius:7px;
+}
+
+.date-box label{
+  font-size:12px;
+  color:#666;
+  display:block;
+  margin-bottom:3px;
+}
+
+.date-box input{
+  border:0;
+  font-weight:bold;
+  font-family:Arial;
+  font-size:15px;
+  background:transparent;
+  color:#171717;
 }
 
 
 /* =====================================================
-   GENERAL HELPERS
+   SECTIONS
    ===================================================== */
 
-function esc(v){
-
-  return String(v??"").replace(
-    /[&<>"']/g,
-    m=>({
-      "&":"&amp;",
-      "<":"&lt;",
-      ">":"&gt;",
-      '"':"&quot;",
-      "'":"&#039;"
-    }[m])
-  );
-
+.section{
+  display:none;
 }
 
-
-function money(n){
-
-  return "AED "+Number(n||0).toLocaleString(
-    "en-AE",
-    {
-      minimumFractionDigits:2,
-      maximumFractionDigits:2
-    }
-  );
-
-}
-
-
-function num(v){
-
-  /*
-    IMPORTANT:
-    Number("-27") correctly returns -27.
-    The old application therefore supports negative
-    numbers.
-  */
-
-  const n=Number(v);
-
-  return Number.isFinite(n)
-    ? n
-    : 0;
-
-}
-
-
-function emptyRow(cols,msg="No entries"){
-
-  return `
-    <tr>
-      <td colspan="${cols}"
-          style="text-align:center;color:#777">
-        ${msg}
-      </td>
-    </tr>
-  `;
-
-}
-
-
-function normalizeName(value){
-
-  return String(value||"")
-    .trim()
-    .toLowerCase();
-
-}
-
-
-function sameDate(a,b){
-
-  return String(a||"")===String(b||"");
-
+.section.active{
+  display:block;
 }
 
 
 /* =====================================================
-   SELECTED DATE
+   SUMMARY CARDS
    ===================================================== */
 
-function selectedDate(){
+.summary-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:14px;
+  margin-bottom:22px;
+}
 
-  const input=document.getElementById("reportDate");
+.summary-card{
+  background:#fff;
+  border:1px solid #ddd;
+  border-left:5px solid #fcc224;
+  padding:18px;
+  border-radius:7px;
+}
 
-  if(input && input.value){
-    return input.value;
-  }
+.summary-card span{
+  display:block;
+  color:#666;
+  font-size:13px;
+  font-weight:bold;
+}
 
-  return state.date||todayString();
+.summary-card strong{
+  display:block;
+  margin-top:9px;
+  font-size:22px;
 }
 
 
 /* =====================================================
-   FILTER TRANSACTIONS BY REPORT DATE
+   REPORT PAPER
    ===================================================== */
 
-function getDaily(type,date=selectedDate()){
+.report-paper{
+  background:#fff;
+  padding:30px;
+  box-shadow:0 2px 10px #00000012;
+  border:1px solid #ddd;
+}
 
-  return (state[type]||[]).filter(
-    r=>sameDate(r.date,date)
-  );
+.report-title{
+  font-size:20px;
+  font-weight:800;
+  border-bottom:2px solid #000;
+  padding-bottom:9px;
+  margin-bottom:12px;
+}
 
+.mini-summary{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:10px;
+  margin-bottom:25px;
+}
+
+.mini-summary div{
+  background:#f7f7f7;
+  padding:12px;
+  border:1px solid #ddd;
+}
+
+.mini-summary span{
+  display:block;
+  font-size:12px;
+  font-weight:bold;
+}
+
+.mini-summary b{
+  display:block;
+  text-align:right;
+  margin-top:6px;
 }
 
 
 /* =====================================================
-   PETTY CASH
+   REPORT BLOCKS
+   ===================================================== */
+
+.report-block{
+  margin-top:25px;
+}
+
+.report-block h2{
+  font-size:15px;
+  background:#000;
+  color:#fff;
+  padding:9px 10px;
+  margin:0;
+  border-left:5px solid #fcc224;
+}
+
+
+/* =====================================================
+   TABLES
+   ===================================================== */
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+}
+
+th,
+td{
+  border:1px solid #ddd;
+  padding:8px;
+  text-align:left;
+  vertical-align:top;
+}
+
+th{
+  background:#f1f1f1;
+  font-weight:800;
+}
+
+td.num,
+th.num{
+  text-align:right;
+}
+
+
+/* =====================================================
+   REMARKS PREVIEW
+   ===================================================== */
+
+.remarks-preview #remarksPreview{
+  min-height:90px;
+  border:1px solid #ddd;
+  padding:12px;
+  white-space:pre-wrap;
+}
+
+
+/* =====================================================
+   SECTION HEAD
+   ===================================================== */
+
+.section-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:15px;
+}
+
+.section-head h2{
+  margin:0;
+}
+
+.add-btn{
+  background:#fcc224;
+  color:#000;
+}
+
+
+/* =====================================================
+   EDITOR TABLE
+   ===================================================== */
+
+.editor-table{
+  background:#fff;
+  border:1px solid #ddd;
+  border-radius:7px;
+  overflow:auto;
+}
+
+.editor-table table{
+  min-width:800px;
+}
+
+.editor-table input,
+.editor-table select,
+.editor-table textarea{
+  width:100%;
+  padding:8px;
+  border:1px solid #ccc;
+  border-radius:4px;
+  font-family:Arial;
+  background:#fff;
+  color:#171717;
+}
+
+.editor-table input:focus,
+.editor-table select:focus,
+.editor-table textarea:focus{
+  outline:none;
+  border-color:#fcc224;
+}
+
+
+/* =====================================================
+   DELETE BUTTON
+   ===================================================== */
+
+.delete-btn{
+  background:#eee;
+  border:0;
+  padding:8px;
+  border-radius:4px;
+  cursor:pointer;
+  color:#171717;
+}
+
+.delete-btn:hover{
+  background:#ddd;
+}
+
+
+/* =====================================================
+   INFO BOX
+   ===================================================== */
+
+.info-box{
+  background:#fff4cc;
+  border-left:5px solid #fcc224;
+  padding:14px;
+  margin-bottom:15px;
+}
+
+
+/* =====================================================
+   REMARKS INPUT
+   ===================================================== */
+
+.remarks-input{
+  width:100%;
+  min-height:220px;
+  padding:15px;
+  border:1px solid #ccc;
+  border-radius:7px;
+  font-family:Arial;
+  font-size:14px;
+  resize:vertical;
+  background:#fff;
+  color:#171717;
+}
+
+.remarks-input:focus{
+  outline:none;
+  border-color:#fcc224;
+}
+
+
+/* =====================================================
+   MODAL
+   ===================================================== */
+
+.modal{
+  position:fixed;
+  inset:0;
+  background:#0008;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:20;
+}
+
+.modal.hidden{
+  display:none;
+}
+
+.modal-card{
+  background:#fff;
+  width:min(470px,92vw);
+  border-radius:9px;
+  padding:25px;
+  box-shadow:0 10px 40px #0006;
+}
+
+.modal-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.modal-head h2{
+  margin:0;
+}
+
+.modal-head button{
+  border:0;
+  background:transparent;
+  font-size:27px;
+  cursor:pointer;
+  color:#171717;
+}
+
+.modal-card label{
+  display:block;
+  padding:9px;
+  border-bottom:1px solid #eee;
+}
+
+.modal-actions{
+  display:flex;
+  gap:10px;
+  margin-top:20px;
+}
+
+
+/* =====================================================
+   PETTY CASH HOLDER STATUS
+   ===================================================== */
+
+.status-select{
+  min-width:110px;
+  font-weight:700;
+  border-radius:6px;
+  padding:6px 8px;
+  cursor:pointer;
+}
+
+.status-active{
+  border:1px solid #2e7d32;
+}
+
+.status-inactive{
+  border:1px solid #c62828;
+}
+
+
+/* =====================================================
+   =====================================================
+   DARK MODE
+   =====================================================
    ===================================================== */
 
 /*
-  Find petty holder.
+   Dark mode is activated by adding:
+
+   body.dark-mode
+
+   Nothing in the page structure is changed.
 */
 
-function findPettyHolder(name){
 
-  const target=normalizeName(name);
-
-  if(!target) return null;
-
-  return state.petty.find(
-    p=>normalizeName(p.holder)===target
-  )||null;
-
-}
-
-
-/*
-  Get all cash received by a holder on a particular day.
-*/
-
-function automaticReceived(holderName,date){
-
-  return getDaily("cash",date).reduce(
-    (total,r)=>{
-
-      if(
-        normalizeName(r.receivedBy)
-        ===
-        normalizeName(holderName)
-      ){
-
-        return total+num(r.amount);
-
-      }
-
-      return total;
-
-    },
-    0
-  );
-
-}
-
-
-/*
-  Get all expenses paid by a holder on a particular day.
-*/
-
-function automaticExpenses(holderName,date){
-
-  return getDaily("expenses",date).reduce(
-    (total,r)=>{
-
-      if(
-        normalizeName(r.paidBy)
-        ===
-        normalizeName(holderName)
-      ){
-
-        return total+num(r.amount);
-
-      }
-
-      return total;
-
-    },
-    0
-  );
-
+body.dark-mode{
+  background:#151515;
+  color:#f2f2f2;
 }
 
 
 /* =====================================================
-   PREVIOUS DATE
+   DARK MODE - MAIN
    ===================================================== */
 
-function previousDate(date){
+body.dark-mode .main{
+  background:#151515;
+}
 
-  const d=new Date(date+"T12:00:00");
+body.dark-mode .topbar h1{
+  color:#fff;
+}
 
-  d.setDate(d.getDate()-1);
-
-  const y=d.getFullYear();
-  const m=String(d.getMonth()+1).padStart(2,"0");
-  const day=String(d.getDate()).padStart(2,"0");
-
-  return `${y}-${m}-${day}`;
-
+body.dark-mode .topbar p{
+  color:#aaa;
 }
 
 
 /* =====================================================
-   CHECK IF A DATE HAS ANY PETTY ACTIVITY
+   DARK MODE - DATE BOX
    ===================================================== */
 
-function hasPettyActivity(holder,date){
+body.dark-mode .date-box{
+  background:#222;
+  border-color:#3a3a3a;
+}
 
-  const cashReceived=
-    automaticReceived(holder,date);
+body.dark-mode .date-box label{
+  color:#aaa;
+}
 
-  const expensesPaid=
-    automaticExpenses(holder,date);
-
-  return cashReceived!==0 ||
-         expensesPaid!==0;
-
+body.dark-mode .date-box input{
+  color:#fff;
 }
 
 
 /* =====================================================
-   FIND PREVIOUS KNOWN PETTY BALANCE
+   DARK MODE - SUMMARY CARDS
    ===================================================== */
 
-/*
-  This is the important part.
+body.dark-mode .summary-card{
+  background:#202020;
+  border-color:#383838;
+  border-left-color:#fcc224;
+}
 
-  Example:
+body.dark-mode .summary-card span{
+  color:#aaa;
+}
 
-  21 Aug:
-  Opening 20
-  Expense 10
-  Closing 10
-
-  22 Aug:
-  Opening automatically becomes 10.
-
-  22 Aug:
-  Expense 5
-  Closing becomes 5
-
-  23 Aug:
-  Opening automatically becomes 5.
-*/
-
-function getOpeningForDate(petty,date){
-
-  const targetDate=date;
-
-  /*
-    First look at the holder's original/base opening.
-  */
-
-  let balance=num(
-    typeof petty.baseOpening!=="undefined"
-      ? petty.baseOpening
-      : petty.opening
-  );
-
-
-  /*
-    We need to calculate all daily movements before
-    the selected date.
-  */
-
-  const allDates=new Set();
-
-  state.cash.forEach(r=>{
-    if(
-      r.date &&
-      r.date<targetDate &&
-      normalizeName(r.receivedBy)
-      ===
-      normalizeName(petty.holder)
-    ){
-      allDates.add(r.date);
-    }
-  });
-
-  state.expenses.forEach(r=>{
-    if(
-      r.date &&
-      r.date<targetDate &&
-      normalizeName(r.paidBy)
-      ===
-      normalizeName(petty.holder)
-    ){
-      allDates.add(r.date);
-    }
-  });
-
-
-  /*
-    Sort dates chronologically.
-  */
-
-  const dates=[...allDates].sort();
-
-
-  /*
-    Apply every day's movement.
-  */
-
-  dates.forEach(date=>{
-
-    const received=
-      automaticReceived(
-        petty.holder,
-        date
-      );
-
-    const expenses=
-      automaticExpenses(
-        petty.holder,
-        date
-      );
-
-    balance=
-      balance
-      +received
-      -expenses;
-
-  });
-
-
-  return balance;
-
+body.dark-mode .summary-card strong{
+  color:#fff;
 }
 
 
 /* =====================================================
-   PETTY FIGURES
+   DARK MODE - REPORT PAPER
    ===================================================== */
 
-function pettyFigures(petty,date=selectedDate()){
+body.dark-mode .report-paper{
+  background:#1e1e1e;
+  border-color:#383838;
+  box-shadow:0 2px 10px #00000055;
+}
 
-  const opening=
-    getOpeningForDate(
-      petty,
-      date
-    );
-
-
-  const autoReceived=
-    automaticReceived(
-      petty.holder,
-      date
-    );
+body.dark-mode .report-title{
+  color:#fff;
+  border-bottom-color:#555;
+}
 
 
-  const autoExpenses=
-    automaticExpenses(
-      petty.holder,
-      date
-    );
+/* =====================================================
+   DARK MODE - MINI SUMMARY
+   ===================================================== */
+
+body.dark-mode .mini-summary div{
+  background:#252525;
+  border-color:#3a3a3a;
+}
+
+body.dark-mode .mini-summary span{
+  color:#bbb;
+}
+
+body.dark-mode .mini-summary b{
+  color:#fff;
+}
 
 
-  /*
-    Legacy manual values are only used on the original
-    saved date, so old data is not lost.
+/* =====================================================
+   DARK MODE - REPORT TABLES
+   ===================================================== */
 
-    New petty cash movements should normally come from
-    Cash Received and Expenses.
-  */
+body.dark-mode th,
+body.dark-mode td{
+  border-color:#3d3d3d;
+}
 
-  let manualReceived=0;
-  let manualExpenses=0;
+body.dark-mode th{
+  background:#292929;
+  color:#fff;
+}
+
+body.dark-mode td{
+  background:#1f1f1f;
+  color:#eee;
+}
 
 
-  /*
-    If this is the first/base date, preserve any old
-    manually entered petty cash values.
-  */
+/* =====================================================
+   DARK MODE - REPORT BLOCK HEADERS
+   ===================================================== */
 
-  const baseDate=state.date;
+body.dark-mode .report-block h2{
+  background:#000;
+  color:#fff;
+}
 
-  if(date===baseDate){
 
-    manualReceived=
-      num(petty.received);
+/* =====================================================
+   DARK MODE - REMARKS
+   ===================================================== */
 
-    manualExpenses=
-      num(petty.expenses);
+body.dark-mode .remarks-preview #remarksPreview{
+  background:#202020;
+  border-color:#3d3d3d;
+  color:#eee;
+}
 
+
+/* =====================================================
+   DARK MODE - EDITOR TABLE
+   ===================================================== */
+
+body.dark-mode .editor-table{
+  background:#1e1e1e;
+  border-color:#383838;
+}
+
+
+/* =====================================================
+   DARK MODE - INPUTS / SELECTS / TEXTAREAS
+   ===================================================== */
+
+body.dark-mode .editor-table input,
+body.dark-mode .editor-table select,
+body.dark-mode .editor-table textarea{
+  background:#292929;
+  color:#fff;
+  border-color:#4a4a4a;
+}
+
+body.dark-mode .editor-table input::placeholder,
+body.dark-mode .editor-table textarea::placeholder{
+  color:#888;
+}
+
+body.dark-mode .editor-table input:focus,
+body.dark-mode .editor-table select:focus,
+body.dark-mode .editor-table textarea:focus{
+  border-color:#fcc224;
+}
+
+
+/* =====================================================
+   DARK MODE - REMARKS INPUT
+   ===================================================== */
+
+body.dark-mode .remarks-input{
+  background:#292929;
+  color:#fff;
+  border-color:#4a4a4a;
+}
+
+body.dark-mode .remarks-input::placeholder{
+  color:#888;
+}
+
+
+/* =====================================================
+   DARK MODE - INFO BOX
+   ===================================================== */
+
+body.dark-mode .info-box{
+  background:#302b18;
+  color:#f5f5f5;
+  border-left-color:#fcc224;
+}
+
+
+/* =====================================================
+   DARK MODE - DELETE BUTTON
+   ===================================================== */
+
+body.dark-mode .delete-btn{
+  background:#333;
+  color:#fff;
+  border:1px solid #4a4a4a;
+}
+
+body.dark-mode .delete-btn:hover{
+  background:#444;
+}
+
+
+/* =====================================================
+   DARK MODE - MODAL
+   ===================================================== */
+
+body.dark-mode .modal-card{
+  background:#202020;
+  color:#fff;
+}
+
+body.dark-mode .modal-head h2{
+  color:#fff;
+}
+
+body.dark-mode .modal-head button{
+  color:#fff;
+}
+
+body.dark-mode .modal-card label{
+  border-bottom-color:#3a3a3a;
+  color:#eee;
+}
+
+
+/* =====================================================
+   DARK MODE - PRINT CHECKBOX LABELS
+   ===================================================== */
+
+body.dark-mode .modal-card input[type="checkbox"]{
+  accent-color:#fcc224;
+}
+
+
+/* =====================================================
+   DARK MODE - STATUS CONTROLS
+   ===================================================== */
+
+body.dark-mode .status-select{
+  background:#292929;
+  color:#fff;
+}
+
+body.dark-mode .status-active{
+  border-color:#4caf50;
+}
+
+body.dark-mode .status-inactive{
+  border-color:#ef5350;
+}
+
+
+/* =====================================================
+   DARK MODE - SELECT OPTIONS
+   ===================================================== */
+
+body.dark-mode select option{
+  background:#292929;
+  color:#fff;
+}
+
+
+/* =====================================================
+   DARK MODE - BUTTONS
+   ===================================================== */
+
+body.dark-mode .dark-btn{
+  background:#222;
+  color:#fff;
+  border-color:#555;
+}
+
+body.dark-mode .dark-btn:hover{
+  background:#333;
+}
+
+
+/* =====================================================
+   RESPONSIVE
+   ===================================================== */
+
+@media(max-width:900px){
+
+  .sidebar{
+    width:190px;
   }
 
-
-  const received=
-    manualReceived
-    +
-    autoReceived;
-
-
-  const expenses=
-    manualExpenses
-    +
-    autoExpenses;
-
-
-  const closing=
-    opening
-    +
-    received
-    -
-    expenses;
-
-
-  return {
-
-    opening,
-
-    manualReceived,
-
-    manualExpenses,
-
-    autoReceived,
-
-    autoExpenses,
-
-    received,
-
-    expenses,
-
-    closing
-
-  };
-
-}
-
-
-/* =====================================================
-   STARTUP
-   ===================================================== */
-
-document.addEventListener(
-  "DOMContentLoaded",
-  ()=>{
-
-    const reportDate=
-      document.getElementById("reportDate");
-
-
-    /*
-      Set current saved report date.
-    */
-
-    reportDate.value=
-      state.date;
-
-
-    /*
-      IMPORTANT:
-
-      Changing the calendar changes the active report date.
-
-      The petty cash opening balance is recalculated
-      automatically from previous days.
-    */
-
-    reportDate.addEventListener(
-      "change",
-      e=>{
-
-        state.date=e.target.value;
-
-        save();
-
-      }
-    );
-
-
-    /*
-      Remarks.
-    */
-
-    document.getElementById(
-      "remarksInput"
-    ).value=state.remarks;
-
-
-    document.getElementById(
-      "remarksInput"
-    ).addEventListener(
-      "input",
-      e=>{
-
-        state.remarks=
-          e.target.value;
-
-        save();
-
-      }
-    );
-
-
-    /*
-      Navigation.
-    */
-
-    document
-      .querySelectorAll(".nav-btn")
-      .forEach(b=>
-
-        b.addEventListener(
-          "click",
-          ()=>{
-
-            document
-              .querySelectorAll(".nav-btn")
-              .forEach(x=>
-                x.classList.remove("active")
-              );
-
-            document
-              .querySelectorAll(".section")
-              .forEach(x=>
-                x.classList.remove("active")
-              );
-
-            b.classList.add("active");
-
-            document
-              .getElementById(
-                b.dataset.section
-              )
-              .classList.add("active");
-
-          }
-        )
-
-      );
-
-
-    /*
-      Print options.
-    */
-
-    document.getElementById(
-      "printOptionsBtn"
-    ).onclick=()=>{
-
-      document
-        .getElementById("printModal")
-        .classList.remove("hidden");
-
-    };
-
-
-    document.getElementById(
-      "printReportBtn"
-    ).onclick=()=>{
-
-      printSelected([
-        "summary",
-        "jobs",
-        "cash",
-        "expenses",
-        "bank",
-        "petty",
-        "inactive",
-        "remarks"
-      ]);
-
-    };
-
-
-    document.getElementById(
-      "closeModal"
-    ).onclick=()=>{
-
-      document
-        .getElementById("printModal")
-        .classList.add("hidden");
-
-    };
-
-
-    document.getElementById(
-      "printFull"
-    ).onclick=()=>{
-
-      document
-        .getElementById("printModal")
-        .classList.add("hidden");
-
-      printSelected([
-        "summary",
-        "jobs",
-        "cash",
-        "expenses",
-        "bank",
-        "petty",
-        "inactive",
-        "remarks"
-      ]);
-
-    };
-
-
-    document.getElementById(
-      "printSelected"
-    ).onclick=()=>{
-
-      const a=[
-        ...document.querySelectorAll(
-          ".print-check:checked"
-        )
-      ].map(x=>x.value);
-
-
-      document
-        .getElementById("printModal")
-        .classList.add("hidden");
-
-
-      printSelected(a);
-
-    };
-
-
-    renderAll();
-
-  }
-);
-
-
-/* =====================================================
-   ADD
-   ===================================================== */
-
-function addJob(){
-
-  state.jobs.push({
-
-    date:selectedDate(),
-
-    jobNo:"",
-    client:"",
-    description:"",
-    total:0,
-    cash:0,
-    incharge:"",
-    status:"Pending"
-
-  });
-
-  save();
-
-}
-
-
-function addCash(){
-
-  state.cash.push({
-
-    date:selectedDate(),
-
-    from:"",
-    jobNo:"",
-    amount:0,
-    receivedBy:""
-
-  });
-
-  save();
-
-}
-
-
-function addExpense(){
-
-  state.expenses.push({
-
-    date:selectedDate(),
-
-    paidTo:"",
-    type:"",
-    amount:0,
-    paidBy:""
-
-  });
-
-  save();
-
-}
-
-
-function addBank(){
-
-  state.bank.push({
-
-    date:selectedDate(),
-
-    reference:"",
-    from:"",
-    amount:0,
-    remarks:""
-
-  });
-
-  save();
-
-}
-
-
-/* =====================================================
-   PETTY CASH STATUS
-   ===================================================== */
-
-function setPettyStatus(i,status){
-
-  if(!state.petty[i]) return;
-
-  state.petty[i].active=
-    status==="active";
-
-  save();
-
-}
-
-
-/* =====================================================
-   UPDATE / DELETE
-   ===================================================== */
-
-function updateArray(
-  type,
-  i,
-  key,
-  value
-){
-
-  if(
-    !state[type] ||
-    !state[type][i]
-  ){
-    return;
+  .main{
+    margin-left:190px;
+    padding:18px;
   }
 
-
-  state[type][i][key]=value;
-
-
-  /*
-    If a transaction somehow does not have a date,
-    attach it to the currently selected dashboard date.
-  */
-
-  if(
-    ["cash","expenses","jobs","bank"].includes(type)
-    &&
-    !state[type][i].date
-  ){
-
-    state[type][i].date=
-      selectedDate();
-
+  .summary-grid,
+  .mini-summary{
+    grid-template-columns:repeat(2,1fr);
   }
-
-
-  save();
 
 }
 
 
-function del(type,i){
+@media(max-width:650px){
 
-  if(!state[type]) return;
-
-  state[type].splice(i,1);
-
-  save();
-
-}
-
-
-/* =====================================================
-   JOBS
-   ===================================================== */
-
-function renderJobs(){
-
-  const el=
-    document.getElementById(
-      "jobsEditor"
-    );
-
-
-  const daily=
-    getDaily("jobs");
-
-
-  el.innerHTML=`
-
-  <div class="editor-table">
-
-  <table>
-
-  <thead>
-
-  <tr>
-
-    <th>Job No</th>
-    <th>Client</th>
-    <th>Description</th>
-    <th>Total Amount</th>
-    <th>Cash</th>
-    <th>Incharge</th>
-    <th>Status</th>
-    <th></th>
-
-  </tr>
-
-  </thead>
-
-  <tbody>
-
-  ${
-    daily.map((r)=>{
-
-      const i=
-        state.jobs.indexOf(r);
-
-      return `
-
-      <tr>
-
-      <td>
-        <input
-          value="${esc(r.jobNo)}"
-          onchange="
-            updateArray(
-              'jobs',
-              ${i},
-              'jobNo',
-              this.value
-            )
-          "
-        >
-      </td>
-
-
-      <td>
-        <input
-          value="${esc(r.client)}"
-          onchange="
-            updateArray(
-              'jobs',
-              ${i},
-              'client',
-              this.value
-            )
-          "
-        >
-      </td>
-
-
-      <td>
-        <input
-          value="${esc(r.description)}"
-          onchange="
-            updateArray(
-              'jobs',
-              ${i},
-              'description',
-              this.value
-            )
-          "
-        >
-      </td>
-
-
-      <td>
-        <input
-          type="number"
-          step="0.01"
-          value="${r.total}"
-          onchange="
-            updateArray(
-              'jobs',
-              ${i},
-              'total',
-              num(this.value)
-            )
-          "
-        >
-      </td>
-
-
-      <td>
-        <input
-          type="number"
-          step="0.01"
-          value="${r.cash}"
-          onchange="
-            updateArray(
-              'jobs',
-              ${i},
-              'cash',
-              num(this.value)
-            )
-          "
-        >
-      </td>
-
-
-      <td>
-        <input
-          value="${esc(r.incharge)}"
-          onchange="
-            updateArray(
-              'jobs',
-              ${i},
-              'incharge',
-              this.value
-            )
-          "
-        >
-      </td>
-
-
-      <td>
-
-        <select
-          onchange="
-            updateArray(
-              'jobs',
-              ${i},
-              'status',
-              this.value
-            )
-          "
-        >
-
-          ${
-            [
-              "Pending",
-              "Partially Received",
-              "Received",
-              "No Amount"
-            ]
-            .map(x=>`
-
-              <option
-                ${r.status===x?"selected":""}
-              >
-                ${x}
-              </option>
-
-            `).join("")
-          }
-
-        </select>
-
-      </td>
-
-
-      <td>
-
-        <button
-          class="delete-btn"
-          onclick="
-            del('jobs',${i})
-          "
-        >
-          Delete
-        </button>
-
-      </td>
-
-      </tr>
-
-      `;
-
-    }).join("")
+  .sidebar{
+    position:static;
+    width:100%;
+    height:auto;
   }
 
-  ${
-    daily.length
-      ? ""
-      : emptyRow(8)
+  .sidebar-bottom{
+    margin-top:15px;
   }
 
-  </tbody>
-
-  </table>
-
-  </div>
-
-  `;
-
-}
-
-
-/* =====================================================
-   CASH
-   ===================================================== */
-
-function renderCash(){
-
-  const daily=
-    getDaily("cash");
-
-
-  document.getElementById(
-    "cashEditor"
-  ).innerHTML=`
-
-  <div class="editor-table">
-
-  <table>
-
-  <thead>
-
-  <tr>
-
-    <th>From Whom</th>
-    <th>Job No</th>
-    <th>Cash</th>
-    <th>Received By</th>
-    <th></th>
-
-  </tr>
-
-  </thead>
-
-
-  <tbody>
-
-  ${
-    daily.map(r=>{
-
-      const i=
-        state.cash.indexOf(r);
-
-      return `
-
-      <tr>
-
-      <td>
-
-        <input
-          value="${esc(r.from)}"
-          onchange="
-            updateArray(
-              'cash',
-              ${i},
-              'from',
-              this.value
-            )
-          "
-        >
-
-      </td>
-
-
-      <td>
-
-        <input
-          value="${esc(r.jobNo)}"
-          onchange="
-            updateArray(
-              'cash',
-              ${i},
-              'jobNo',
-              this.value
-            )
-          "
-        >
-
-      </td>
-
-
-      <td>
-
-        <input
-          type="number"
-          step="0.01"
-          value="${r.amount}"
-          onchange="
-            updateArray(
-              'cash',
-              ${i},
-              'amount',
-              num(this.value)
-            )
-          "
-        >
-
-      </td>
-
-
-      <td>
-
-        <input
-          value="${esc(r.receivedBy)}"
-          onchange="
-            updateArray(
-              'cash',
-              ${i},
-              'receivedBy',
-              this.value
-            )
-          "
-        >
-
-      </td>
-
-
-      <td>
-
-        <button
-          class="delete-btn"
-          onclick="
-            del('cash',${i})
-          "
-        >
-          Delete
-        </button>
-
-      </td>
-
-      </tr>
-
-      `;
-
-    }).join("")
+  .main{
+    margin-left:0;
   }
 
-  ${
-    daily.length
-      ? ""
-      : emptyRow(5)
+  .topbar{
+    display:block;
   }
 
-  </tbody>
-
-  </table>
-
-  </div>
-
-  `;
-
-}
-
-
-/* =====================================================
-   EXPENSES
-   ===================================================== */
-
-function renderExpenses(){
-
-  const daily=
-    getDaily("expenses");
-
-
-  document.getElementById(
-    "expenseEditor"
-  ).innerHTML=`
-
-  <div class="editor-table">
-
-  <table>
-
-  <thead>
-
-  <tr>
-
-    <th>Paid To</th>
-    <th>Expense Type</th>
-    <th>Amount</th>
-    <th>Paid By</th>
-    <th></th>
-
-  </tr>
-
-  </thead>
-
-
-  <tbody>
-
-  ${
-    daily.map(r=>{
-
-      const i=
-        state.expenses.indexOf(r);
-
-      return `
-
-      <tr>
-
-      <td>
-
-        <input
-          value="${esc(r.paidTo)}"
-          onchange="
-            updateArray(
-              'expenses',
-              ${i},
-              'paidTo',
-              this.value
-            )
-          "
-        >
-
-      </td>
-
-
-      <td>
-
-        <input
-          value="${esc(r.type)}"
-          onchange="
-            updateArray(
-              'expenses',
-              ${i},
-              'type',
-              this.value
-            )
-          "
-        >
-
-      </td>
-
-
-      <td>
-
-        <input
-          type="number"
-          step="0.01"
-          value="${r.amount}"
-          onchange="
-            updateArray(
-              'expenses',
-              ${i},
-              'amount',
-              num(this.value)
-            )
-          "
-        >
-
-      </td>
-
-
-      <td>
-
-        <input
-          value="${esc(r.paidBy)}"
-          onchange="
-            updateArray(
-              'expenses',
-              ${i},
-              'paidBy',
-              this.value
-            )
-          "
-        >
-
-      </td>
-
-
-      <td>
-
-        <button
-          class="delete-btn"
-          onclick="
-            del('expenses',${i})
-          "
-        >
-          Delete
-        </button>
-
-      </td>
-
-      </tr>
-
-      `;
-
-    }).join("")
+  .date-box{
+    margin-top:15px;
   }
 
-  ${
-    daily.length
-      ? ""
-      : emptyRow(5)
+  .summary-grid,
+  .mini-summary{
+    grid-template-columns:1fr;
   }
-
-  </tbody>
-
-  </table>
-
-  </div>
-
-  `;
-
-}
-
-
-/* =====================================================
-   BANK
-   ===================================================== */
-
-function renderBank(){
-
-  const daily=
-    getDaily("bank");
-
-
-  document.getElementById(
-    "bankEditor"
-  ).innerHTML=`
-
-  <div class="editor-table">
-
-  <table>
-
-  <thead>
-
-  <tr>
-
-    <th>Received On</th>
-    <th>Reference</th>
-    <th>From Whom</th>
-    <th>Amount</th>
-    <th>Remarks</th>
-    <th></th>
-
-  </tr>
-
-  </thead>
-
-
-  <tbody>
-
-  ${
-    daily.map(r=>{
-
-      const i=
-        state.bank.indexOf(r);
-
-      return `
-
-      <tr>
-
-      <td>
-
-        <input
-          type="date"
-          value="${r.date}"
-          onchange="
-            updateArray(
-              'bank',
-              ${i},
-              'date',
-              this.value
-            )
-          "
-        >
-
-      </td>
-
-
-      <td>
-
-        <input
-          value="${esc(r.reference)}"
-          onchange="
-            updateArray(
-              'bank',
-              ${i},
-              'reference',
-              this.value
-            )
-          "
-        >
-
-      </td>
-
-
-      <td>
-
-        <input
-          value="${esc(r.from)}"
-          onchange="
-            updateArray(
-              'bank',
-              ${i},
-              'from',
-              this.value
-            )
-          "
-        >
-
-      </td>
-
-
-      <td>
-
-        <input
-          type="number"
-          step="0.01"
-          value="${r.amount}"
-          onchange="
-            updateArray(
-              'bank',
-              ${i},
-              'amount',
-              num(this.value)
-            )
-          "
-        >
-
-      </td>
-
-
-      <td>
-
-        <input
-          value="${esc(r.remarks)}"
-          onchange="
-            updateArray(
-              'bank',
-              ${i},
-              'remarks',
-              this.value
-            )
-          "
-        >
-
-      </td>
-
-
-      <td>
-
-        <button
-          class="delete-btn"
-          onclick="
-            del('bank',${i})
-          "
-        >
-          Delete
-        </button>
-
-      </td>
-
-      </tr>
-
-      `;
-
-    }).join("")
-  }
-
-  ${
-    daily.length
-      ? ""
-      : emptyRow(6)
-  }
-
-  </tbody>
-
-  </table>
-
-  </div>
-
-  `;
-
-}
-
-
-/* =====================================================
-   PETTY CASH
-   ===================================================== */
-
-function renderPetty(){
-
-  const date=
-    selectedDate();
-
-
-  document.getElementById(
-    "pettyEditor"
-  ).innerHTML=`
-
-  <div class="editor-table">
-
-  <table>
-
-  <thead>
-
-  <tr>
-
-    <th>Holder</th>
-    <th>Opening</th>
-    <th>Received</th>
-    <th>Expenses</th>
-    <th>Closing</th>
-    <th>Status</th>
-
-  </tr>
-
-  </thead>
-
-
-  <tbody>
-
-  ${
-    state.petty.map((r,i)=>{
-
-      const figures=
-        pettyFigures(r,date);
-
-
-      return `
-
-      <tr>
-
-        <td>
-          <b>${esc(r.holder)}</b>
-        </td>
-
-
-        <td>
-
-          <input
-            type="number"
-            step="0.01"
-            value="${figures.opening}"
-            ${
-              date===state.date
-              ? `onchange="
-                  updateBaseOpening(
-                    ${i},
-                    num(this.value)
-                  )
-                "`
-              : "readonly"
-            }
-            title="${
-              date===state.date
-                ? "Initial/base opening balance"
-                : "Automatically carried forward from previous days"
-            }"
-          >
-
-        </td>
-
-
-        <td>
-
-          <input
-            type="number"
-            step="0.01"
-            value="${figures.received}"
-            readonly
-            title="Automatically includes cash received by this holder"
-          >
-
-        </td>
-
-
-        <td>
-
-          <input
-            type="number"
-            step="0.01"
-            value="${figures.expenses}"
-            readonly
-            title="Automatically includes expenses paid by this holder"
-          >
-
-        </td>
-
-
-        <td>
-
-          <b>
-            ${money(figures.closing)}
-          </b>
-
-        </td>
-
-
-        <td>
-
-          <select
-            class="status-select ${
-              r.active
-                ? "status-active"
-                : "status-inactive"
-            }"
-            onchange="
-              setPettyStatus(
-                ${i},
-                this.value
-              )
-            "
-          >
-
-            <option
-              value="active"
-              ${r.active?"selected":""}
-            >
-              Active
-            </option>
-
-            <option
-              value="inactive"
-              ${!r.active?"selected":""}
-            >
-              Inactive
-            </option>
-
-          </select>
-
-        </td>
-
-      </tr>
-
-      `;
-
-    }).join("")
-  }
-
-  </tbody>
-
-  </table>
-
-  </div>
-
-  `;
-
-}
-
-
-/* =====================================================
-   UPDATE BASE OPENING
-   ===================================================== */
-
-function updateBaseOpening(i,value){
-
-  if(!state.petty[i]) return;
-
-  state.petty[i].baseOpening=
-    num(value);
-
-  /*
-    Keep old opening field synchronized for compatibility.
-  */
-
-  state.petty[i].opening=
-    num(value);
-
-  save();
-
-}
-
-
-/* =====================================================
-   GENERIC PREVIEW ROWS
-   ===================================================== */
-
-function rowsDaily(
-  type,
-  fn,
-  cols
-){
-
-  const daily=
-    getDaily(type);
-
-
-  return daily.length
-    ? daily.map(fn).join("")
-    : emptyRow(cols);
-
-}
-
-
-/* =====================================================
-   REPORT PREVIEW
-   ===================================================== */
-
-function renderPreview(){
-
-  const date=
-    selectedDate();
-
-
-  /*
-    Only transactions belonging to the selected date
-    are included in the report.
-  */
-
-  const dailyCash=
-    getDaily("cash");
-
-  const dailyBank=
-    getDaily("bank");
-
-  const dailyExpenses=
-    getDaily("expenses");
-
-
-  const cashTotal=
-    dailyCash.reduce(
-      (a,r)=>a+num(r.amount),
-      0
-    );
-
-
-  const bankTotal=
-    dailyBank.reduce(
-      (a,r)=>a+num(r.amount),
-      0
-    );
-
-
-  const expenseTotal=
-    dailyExpenses.reduce(
-      (a,r)=>a+num(r.amount),
-      0
-    );
-
-
-  const pettyTotal=
-    state.petty
-      .filter(r=>r.active)
-      .reduce(
-        (a,r)=>
-          a+pettyFigures(r,date).closing,
-        0
-      );
-
-
-  /*
-    Dashboard totals.
-  */
-
-  document.getElementById(
-    "sumCash"
-  ).textContent=
-    money(cashTotal);
-
-
-  document.getElementById(
-    "sumBank"
-  ).textContent=
-    money(bankTotal);
-
-
-  document.getElementById(
-    "sumExpenses"
-  ).textContent=
-    money(expenseTotal);
-
-
-  document.getElementById(
-    "sumPetty"
-  ).textContent=
-    money(pettyTotal);
-
-
-  document.getElementById(
-    "paperCash"
-  ).textContent=
-    money(cashTotal)
-      .replace("AED ","");
-
-
-  document.getElementById(
-    "paperBank"
-  ).textContent=
-    money(bankTotal)
-      .replace("AED ","");
-
-
-  document.getElementById(
-    "paperExpenses"
-  ).textContent=
-    money(expenseTotal)
-      .replace("AED ","");
-
-
-  document.getElementById(
-    "paperPetty"
-  ).textContent=
-    money(pettyTotal)
-      .replace("AED ","");
-
-
-  /* =================================================
-     JOBS
-     ================================================= */
-
-  document.querySelector(
-    "#jobsPreview tbody"
-  ).innerHTML=
-
-    rowsDaily(
-      "jobs",
-      r=>`
-
-        <tr>
-
-          <td>${esc(r.jobNo)}</td>
-
-          <td>${esc(r.client)}</td>
-
-          <td>${esc(r.description)}</td>
-
-          <td class="num">
-            ${num(r.total).toFixed(2)}
-          </td>
-
-          <td class="num">
-            ${num(r.cash).toFixed(2)}
-          </td>
-
-          <td>${esc(r.incharge)}</td>
-
-          <td>${esc(r.status)}</td>
-
-        </tr>
-
-      `,
-      7
-    );
-
-
-  /* =================================================
-     CASH
-     ================================================= */
-
-  document.querySelector(
-    "#cashPreview tbody"
-  ).innerHTML=
-
-    rowsDaily(
-      "cash",
-      r=>`
-
-        <tr>
-
-          <td>${esc(r.from)}</td>
-
-          <td>${esc(r.jobNo)}</td>
-
-          <td class="num">
-            ${num(r.amount).toFixed(2)}
-          </td>
-
-          <td>${esc(r.receivedBy)}</td>
-
-        </tr>
-
-      `,
-      4
-    );
-
-
-  /* =================================================
-     EXPENSES
-     ================================================= */
-
-  document.querySelector(
-    "#expensePreview tbody"
-  ).innerHTML=
-
-    rowsDaily(
-      "expenses",
-      r=>`
-
-        <tr>
-
-          <td>${esc(r.paidTo)}</td>
-
-          <td>${esc(r.type)}</td>
-
-          <td class="num">
-            ${num(r.amount).toFixed(2)}
-          </td>
-
-          <td>${esc(r.paidBy)}</td>
-
-        </tr>
-
-      `,
-      4
-    );
-
-
-  /* =================================================
-     BANK
-     ================================================= */
-
-  document.querySelector(
-    "#bankPreview tbody"
-  ).innerHTML=
-
-    rowsDaily(
-      "bank",
-      r=>`
-
-        <tr>
-
-          <td>${formatDate(r.date)}</td>
-
-          <td>${esc(r.reference)}</td>
-
-          <td>${esc(r.from)}</td>
-
-          <td class="num">
-            ${num(r.amount).toFixed(2)}
-          </td>
-
-          <td>${esc(r.remarks)}</td>
-
-        </tr>
-
-      `,
-      5
-    );
-
-
-  /* =================================================
-     PETTY CASH
-     ================================================= */
-
-  const active=
-    state.petty.filter(
-      r=>r.active
-    );
-
-
-  const inactive=
-    state.petty.filter(
-      r=>!r.active
-    );
-
-
-  const pettyRows=r=>{
-
-    const figures=
-      pettyFigures(
-        r,
-        date
-      );
-
-
-    return `
-
-      <tr>
-
-        <td>
-          ${esc(r.holder)}
-        </td>
-
-        <td class="num">
-          ${figures.opening.toFixed(2)}
-        </td>
-
-        <td class="num">
-          ${figures.received.toFixed(2)}
-        </td>
-
-        <td class="num">
-          ${figures.expenses.toFixed(2)}
-        </td>
-
-        <td class="num">
-          ${figures.closing.toFixed(2)}
-        </td>
-
-      </tr>
-
-    `;
-
-  };
-
-
-  document.querySelector(
-    "#pettyPreview tbody"
-  ).innerHTML=
-
-    active.length
-      ? active.map(pettyRows).join("")
-      : emptyRow(5);
-
-
-  document.querySelector(
-    "#inactivePreview tbody"
-  ).innerHTML=
-
-    inactive.length
-      ? inactive.map(pettyRows).join("")
-      : emptyRow(5);
-
-
-  document.getElementById(
-    "remarksPreview"
-  ).textContent=
-    state.remarks||"";
-
-}
-
-
-/* =====================================================
-   RENDER ALL
-   ===================================================== */
-
-function renderAll(){
-
-  renderJobs();
-
-  renderCash();
-
-  renderExpenses();
-
-  renderBank();
-
-  renderPetty();
-
-  renderPreview();
-
-
-  document.getElementById(
-    "reportDate"
-  ).value=
-    state.date;
-
-
-  document.getElementById(
-    "remarksInput"
-  ).value=
-    state.remarks;
 
 }
 
@@ -2301,149 +865,89 @@ function renderAll(){
    PRINT
    ===================================================== */
 
-function printSelected(sections){
+@media print{
 
   /*
-    Make absolutely sure the printed report uses the
-    date currently selected in the Dashboard calendar.
+    Always print in the normal light report style,
+    even if dark mode is currently active.
   */
 
-  const date=
-    selectedDate();
-
-
-  state.date=date;
-
-
-  renderPreview();
-
-
-  const all=[
-
-    "summary",
-    "jobs",
-    "cash",
-    "expenses",
-    "bank",
-    "petty",
-    "inactive",
-    "remarks"
-
-  ];
-
-
-  const map={
-
-    summary:".mini-summary",
-
-    jobs:".report-block:nth-of-type(1)",
-
-    cash:".report-block:nth-of-type(2)",
-
-    expenses:".report-block:nth-of-type(3)",
-
-    bank:".report-block:nth-of-type(4)",
-
-    petty:".report-block:nth-of-type(5)",
-
-    inactive:".report-block:nth-of-type(6)",
-
-    remarks:".report-block:nth-of-type(7)"
-
-  };
-
-
-  /*
-    Add selected date to report heading.
-  */
-
-  const reportTitle=
-    document.querySelector(
-      ".report-title"
-    );
-
-
-  const originalTitle=
-    reportTitle
-      ? reportTitle.innerHTML
-      : "";
-
-
-  if(reportTitle){
-
-    reportTitle.innerHTML=
-      `SUMMARY DASHBOARD
-       <span class="print-report-date">
-         — ${formatDate(date)}
-       </span>`;
-
+  body,
+  body.dark-mode{
+    background:#fff!important;
+    color:#000!important;
   }
 
+  body.dark-mode .report-paper{
+    background:#fff!important;
+    color:#000!important;
+    border:0!important;
+    box-shadow:none!important;
+  }
 
-  /*
-    Hide sections not selected.
-  */
+  body.dark-mode .report-title{
+    color:#000!important;
+    border-bottom-color:#000!important;
+  }
 
-  all.forEach(s=>{
+  body.dark-mode .mini-summary div{
+    background:#f7f7f7!important;
+    border-color:#ddd!important;
+    color:#000!important;
+  }
 
-    const el=
-      document.querySelector(
-        map[s]
-      );
+  body.dark-mode .mini-summary span,
+  body.dark-mode .mini-summary b{
+    color:#000!important;
+  }
 
+  body.dark-mode th{
+    background:#f1f1f1!important;
+    color:#000!important;
+  }
 
-    if(el){
+  body.dark-mode td{
+    background:#fff!important;
+    color:#000!important;
+    border-color:#ddd!important;
+  }
 
-      el.classList.toggle(
-        "hidden-print",
-        !sections.includes(s)
-      );
+  body.dark-mode .report-block h2{
+    background:#000!important;
+    color:#fff!important;
+  }
 
-    }
+  body.dark-mode .remarks-preview #remarksPreview{
+    background:#fff!important;
+    color:#000!important;
+    border-color:#ddd!important;
+  }
 
-  });
+  .sidebar,
+  .topbar,
+  .summary-grid,
+  #printModal,
+  .section:not(#dashboard){
+    display:none!important;
+  }
 
+  .main{
+    margin:0;
+    padding:0;
+  }
 
-  /*
-    Print.
-  */
+  .report-paper{
+    box-shadow:none;
+    border:0;
+    padding:10px;
+  }
 
-  window.print();
+  .report-block{
+    break-inside:avoid;
+  }
 
-
-  /*
-    Restore normal screen after printing.
-  */
-
-  setTimeout(()=>{
-
-    all.forEach(s=>{
-
-      const el=
-        document.querySelector(
-          map[s]
-        );
-
-
-      if(el){
-
-        el.classList.remove(
-          "hidden-print"
-        );
-
-      }
-
-    });
-
-
-    if(reportTitle){
-
-      reportTitle.innerHTML=
-        originalTitle;
-
-    }
-
-  },500);
+  .report-block.hidden-print{
+    display:none!important;
+  }
 
 }
-

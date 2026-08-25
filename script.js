@@ -1,5 +1,16 @@
 const KEY="alJefoonDailyExpenseReportV1";
 
+/* =====================================================
+   GOOGLE DRIVE DAILY BACKUP
+   ===================================================== */
+
+const GOOGLE_DRIVE_BACKUP_URL =
+  "https://script.google.com/macros/s/AKfycbz_cWx25mqNcXNffHunxOPrCiwp7H4IWUcEfJvs9HlzD6LFFbKFODFRE8Qx3FubhcLgsg/exec";
+
+const BACKUP_STATUS_KEY =
+  "alJefoonDailyExpenseBackupV1";
+
+
 const holders=[
   {name:"Ali",active:true},
   {name:"Saud",active:true},
@@ -26,6 +37,7 @@ function todayString(){
   return `${y}-${m}-${day}`;
 }
 
+
 function formatDate(date){
 
   if(!date) return "";
@@ -36,6 +48,7 @@ function formatDate(date){
 
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
+
 
 function dateValue(date){
   return String(date||"");
@@ -57,6 +70,7 @@ function defaultState(){
     bank:[],
 
     petty:holders.map(h=>({
+
       holder:h.name,
 
       /*
@@ -64,22 +78,26 @@ function defaultState(){
         Future days automatically use the previous day's
         closing balance.
       */
+
       baseOpening:0,
 
       /*
         Keep old opening field for compatibility with
         existing saved data.
       */
+
       opening:0,
 
       received:0,
       expenses:0,
 
       active:h.active
+
     })),
 
     remarks:""
   };
+
 }
 
 
@@ -182,12 +200,19 @@ function load(){
       if(!exists){
 
         saved.petty.push({
+
           holder:h.name,
+
           baseOpening:0,
+
           opening:0,
+
           received:0,
+
           expenses:0,
+
           active:h.active
+
         });
 
       }
@@ -204,27 +229,38 @@ function load(){
     */
 
     saved.cash.forEach(r=>{
+
       if(!r.date){
         r.date=saved.date;
       }
+
     });
+
 
     saved.expenses.forEach(r=>{
+
       if(!r.date){
         r.date=saved.date;
       }
+
     });
+
 
     saved.jobs.forEach(r=>{
+
       if(!r.date){
         r.date=saved.date;
       }
+
     });
 
+
     saved.bank.forEach(r=>{
+
       if(!r.date){
         r.date=saved.date;
       }
+
     });
 
 
@@ -235,7 +271,9 @@ function load(){
     console.error("Load error:",e);
 
     return defaultState();
+
   }
+
 }
 
 
@@ -251,6 +289,496 @@ function save(){
   );
 
   renderAll();
+
+}
+
+
+/* =====================================================
+   GOOGLE DRIVE BACKUP STATUS
+   ===================================================== */
+
+function getBackupStatus(){
+
+  try{
+
+    const saved=
+      JSON.parse(
+        localStorage.getItem(
+          BACKUP_STATUS_KEY
+        )
+      );
+
+    return saved &&
+           typeof saved==="object"
+      ? saved
+      : {};
+
+  }catch(e){
+
+    console.error(
+      "Backup status load error:",
+      e
+    );
+
+    return {};
+
+  }
+
+}
+
+
+function saveBackupStatus(status){
+
+  try{
+
+    localStorage.setItem(
+      BACKUP_STATUS_KEY,
+      JSON.stringify(status)
+    );
+
+  }catch(e){
+
+    console.error(
+      "Backup status save error:",
+      e
+    );
+
+  }
+
+}
+
+
+/* =====================================================
+   GET REPORT DATA FOR BACKUP
+   ===================================================== */
+
+/*
+  This creates a complete snapshot of the selected
+  report date.
+
+  The backup includes the original data as well as
+  calculated petty cash figures.
+
+  Nothing in the visible application is changed.
+*/
+
+function createBackupData(date){
+
+  const dailyJobs=
+    getDaily(
+      "jobs",
+      date
+    );
+
+  const dailyCash=
+    getDaily(
+      "cash",
+      date
+    );
+
+  const dailyExpenses=
+    getDaily(
+      "expenses",
+      date
+    );
+
+  const dailyBank=
+    getDaily(
+      "bank",
+      date
+    );
+
+
+  const petty=
+    state.petty.map(r=>{
+
+      const figures=
+        pettyFigures(
+          r,
+          date
+        );
+
+      return {
+
+        holder:r.holder,
+
+        active:r.active,
+
+        opening:figures.opening,
+
+        received:figures.received,
+
+        expenses:figures.expenses,
+
+        closing:figures.closing
+
+      };
+
+    });
+
+
+  const cashTotal=
+    dailyCash.reduce(
+      (a,r)=>
+        a+num(r.amount),
+      0
+    );
+
+
+  const bankTotal=
+    dailyBank.reduce(
+      (a,r)=>
+        a+num(r.amount),
+      0
+    );
+
+
+  const expenseTotal=
+    dailyExpenses.reduce(
+      (a,r)=>
+        a+num(r.amount),
+      0
+    );
+
+
+  const activePettyTotal=
+    state.petty
+      .filter(r=>r.active)
+      .reduce(
+        (a,r)=>
+          a+
+          pettyFigures(
+            r,
+            date
+          ).closing,
+        0
+      );
+
+
+  return {
+
+    backupVersion:"1.0",
+
+    company:"AL JEFOON TENTS",
+
+    reportDate:date,
+
+    reportDateFormatted:
+      formatDate(date),
+
+    backedUpAt:
+      new Date().toISOString(),
+
+    summary:{
+
+      cashTotal:cashTotal,
+
+      bankTotal:bankTotal,
+
+      expensesTotal:expenseTotal,
+
+      activePettyCashTotal:
+        activePettyTotal
+
+    },
+
+    jobs:dailyJobs,
+
+    cash:dailyCash,
+
+    expenses:dailyExpenses,
+
+    bank:dailyBank,
+
+    pettyCash:petty,
+
+    remarks:state.remarks||""
+
+  };
+
+}
+
+
+/* =====================================================
+   SEND DAILY BACKUP TO GOOGLE DRIVE
+   ===================================================== */
+
+/*
+  IMPORTANT:
+
+  The browser uses "no-cors" so the local HTML application
+  can send the data to the Google Apps Script web app
+  without requiring a visible change to the application.
+
+  The Google Apps Script itself prevents duplicate files
+  by using the report date as the filename.
+*/
+
+async function sendBackupToGoogleDrive(date){
+
+  if(!date){
+
+    console.warn(
+      "Google Drive backup skipped: no date."
+    );
+
+    return false;
+
+  }
+
+
+  if(
+    !GOOGLE_DRIVE_BACKUP_URL ||
+    GOOGLE_DRIVE_BACKUP_URL.indexOf(
+      "script.google.com"
+    )===-1
+  ){
+
+    console.error(
+      "Google Drive backup URL is not configured."
+    );
+
+    return false;
+
+  }
+
+
+  const backupData=
+    createBackupData(date);
+
+
+  try{
+
+    await fetch(
+      GOOGLE_DRIVE_BACKUP_URL,
+      {
+
+        method:"POST",
+
+        mode:"no-cors",
+
+        headers:{
+          "Content-Type":
+            "text/plain;charset=utf-8"
+        },
+
+        body:
+          JSON.stringify(
+            backupData
+          )
+
+      }
+    );
+
+
+    /*
+      Because no-cors returns an opaque response,
+      JavaScript cannot read the response from Google.
+
+      The Google Apps Script is designed to safely
+      replace the same date's file if it already exists.
+
+      Therefore, after the request completes, we mark
+      the date as backed up locally.
+    */
+
+    const status=
+      getBackupStatus();
+
+
+    status[date]={
+      backedUp:true,
+
+      backedUpAt:
+        new Date().toISOString()
+    };
+
+
+    saveBackupStatus(status);
+
+
+    console.log(
+      "Google Drive backup sent for:",
+      date
+    );
+
+
+    return true;
+
+  }catch(error){
+
+    console.error(
+      "Google Drive backup failed:",
+      error
+    );
+
+    /*
+      Do NOT mark the date as backed up if the request
+      fails. The next time the application opens,
+      it can try again.
+    */
+
+    return false;
+
+  }
+
+}
+
+
+/* =====================================================
+   AUTOMATIC DAILY BACKUP
+   ===================================================== */
+
+/*
+  The browser cannot run JavaScript while the application
+  is completely closed.
+
+  Therefore, when the application is opened on a new day,
+  this function checks the previous day.
+
+  Example:
+
+  Open app on 25 August.
+
+  It checks:
+
+  24 August
+
+  If 24 August has not been backed up, it sends the
+  complete 24 August report to Google Drive.
+
+  This gives you one backup per completed day.
+*/
+
+async function automaticDailyBackup(){
+
+  try{
+
+    const today=
+      todayString();
+
+
+    const previous=
+      previousDate(today);
+
+
+    const status=
+      getBackupStatus();
+
+
+    /*
+      Already backed up locally.
+    */
+
+    if(
+      status[previous] &&
+      status[previous].backedUp
+    ){
+
+      console.log(
+        "Daily backup already completed for:",
+        previous
+      );
+
+      return;
+
+    }
+
+
+    /*
+      Only backup if there is actually some data for
+      the previous date.
+
+      We check all report sections.
+    */
+
+    const hasJobs=
+      getDaily(
+        "jobs",
+        previous
+      ).length>0;
+
+
+    const hasCash=
+      getDaily(
+        "cash",
+        previous
+      ).length>0;
+
+
+    const hasExpenses=
+      getDaily(
+        "expenses",
+        previous
+      ).length>0;
+
+
+    const hasBank=
+      getDaily(
+        "bank",
+        previous
+      ).length>0;
+
+
+    const hasRemarks=
+      String(
+        state.remarks||""
+      ).trim()!=="";
+
+
+    /*
+      Check petty cash activity as well.
+    */
+
+    const hasPetty=
+      state.petty.some(
+        p=>
+          hasPettyActivity(
+            p.holder,
+            previous
+          )
+      );
+
+
+    /*
+      If the previous day has no data, don't create
+      an empty backup.
+
+      It will check again next time the app opens.
+    */
+
+    if(
+      !hasJobs &&
+      !hasCash &&
+      !hasExpenses &&
+      !hasBank &&
+      !hasRemarks &&
+      !hasPetty
+    ){
+
+      console.log(
+        "No report data found for:",
+        previous
+      );
+
+      return;
+
+    }
+
+
+    await sendBackupToGoogleDrive(
+      previous
+    );
+
+  }catch(error){
+
+    console.error(
+      "Automatic daily backup error:",
+      error
+    );
+
+  }
+
 }
 
 
@@ -341,13 +869,17 @@ function sameDate(a,b){
 
 function selectedDate(){
 
-  const input=document.getElementById("reportDate");
+  const input=
+    document.getElementById(
+      "reportDate"
+    );
 
   if(input && input.value){
     return input.value;
   }
 
   return state.date||todayString();
+
 }
 
 
@@ -355,10 +887,16 @@ function selectedDate(){
    FILTER TRANSACTIONS BY REPORT DATE
    ===================================================== */
 
-function getDaily(type,date=selectedDate()){
+function getDaily(
+  type,
+  date=selectedDate()
+){
 
   return (state[type]||[]).filter(
-    r=>sameDate(r.date,date)
+    r=>sameDate(
+      r.date,
+      date
+    )
   );
 
 }
@@ -374,12 +912,16 @@ function getDaily(type,date=selectedDate()){
 
 function findPettyHolder(name){
 
-  const target=normalizeName(name);
+  const target=
+    normalizeName(name);
 
   if(!target) return null;
 
   return state.petty.find(
-    p=>normalizeName(p.holder)===target
+    p=>
+      normalizeName(p.holder)
+      ===
+      target
   )||null;
 
 }
@@ -389,18 +931,29 @@ function findPettyHolder(name){
   Get all cash received by a holder on a particular day.
 */
 
-function automaticReceived(holderName,date){
+function automaticReceived(
+  holderName,
+  date
+){
 
-  return getDaily("cash",date).reduce(
+  return getDaily(
+    "cash",
+    date
+  ).reduce(
     (total,r)=>{
 
       if(
-        normalizeName(r.receivedBy)
+        normalizeName(
+          r.receivedBy
+        )
         ===
-        normalizeName(holderName)
+        normalizeName(
+          holderName
+        )
       ){
 
-        return total+num(r.amount);
+        return total+
+          num(r.amount);
 
       }
 
@@ -417,18 +970,29 @@ function automaticReceived(holderName,date){
   Get all expenses paid by a holder on a particular day.
 */
 
-function automaticExpenses(holderName,date){
+function automaticExpenses(
+  holderName,
+  date
+){
 
-  return getDaily("expenses",date).reduce(
+  return getDaily(
+    "expenses",
+    date
+  ).reduce(
     (total,r)=>{
 
       if(
-        normalizeName(r.paidBy)
+        normalizeName(
+          r.paidBy
+        )
         ===
-        normalizeName(holderName)
+        normalizeName(
+          holderName
+        )
       ){
 
-        return total+num(r.amount);
+        return total+
+          num(r.amount);
 
       }
 
@@ -447,13 +1011,27 @@ function automaticExpenses(holderName,date){
 
 function previousDate(date){
 
-  const d=new Date(date+"T12:00:00");
+  const d=
+    new Date(
+      date+"T12:00:00"
+    );
 
-  d.setDate(d.getDate()-1);
+  d.setDate(
+    d.getDate()-1
+  );
 
-  const y=d.getFullYear();
-  const m=String(d.getMonth()+1).padStart(2,"0");
-  const day=String(d.getDate()).padStart(2,"0");
+  const y=
+    d.getFullYear();
+
+  const m=
+    String(
+      d.getMonth()+1
+    ).padStart(2,"0");
+
+  const day=
+    String(
+      d.getDate()
+    ).padStart(2,"0");
 
   return `${y}-${m}-${day}`;
 
@@ -464,13 +1042,22 @@ function previousDate(date){
    CHECK IF A DATE HAS ANY PETTY ACTIVITY
    ===================================================== */
 
-function hasPettyActivity(holder,date){
+function hasPettyActivity(
+  holder,
+  date
+){
 
   const cashReceived=
-    automaticReceived(holder,date);
+    automaticReceived(
+      holder,
+      date
+    );
 
   const expensesPaid=
-    automaticExpenses(holder,date);
+    automaticExpenses(
+      holder,
+      date
+    );
 
   return cashReceived!==0 ||
          expensesPaid!==0;
@@ -503,19 +1090,25 @@ function hasPettyActivity(holder,date){
   Opening automatically becomes 5.
 */
 
-function getOpeningForDate(petty,date){
+function getOpeningForDate(
+  petty,
+  date
+){
 
-  const targetDate=date;
+  const targetDate=
+    date;
+
 
   /*
     First look at the holder's original/base opening.
   */
 
-  let balance=num(
-    typeof petty.baseOpening!=="undefined"
-      ? petty.baseOpening
-      : petty.opening
-  );
+  let balance=
+    num(
+      typeof petty.baseOpening!=="undefined"
+        ? petty.baseOpening
+        : petty.opening
+    );
 
 
   /*
@@ -523,30 +1116,53 @@ function getOpeningForDate(petty,date){
     the selected date.
   */
 
-  const allDates=new Set();
+  const allDates=
+    new Set();
+
 
   state.cash.forEach(r=>{
+
     if(
       r.date &&
       r.date<targetDate &&
-      normalizeName(r.receivedBy)
+      normalizeName(
+        r.receivedBy
+      )
       ===
-      normalizeName(petty.holder)
+      normalizeName(
+        petty.holder
+      )
     ){
-      allDates.add(r.date);
+
+      allDates.add(
+        r.date
+      );
+
     }
+
   });
 
+
   state.expenses.forEach(r=>{
+
     if(
       r.date &&
       r.date<targetDate &&
-      normalizeName(r.paidBy)
+      normalizeName(
+        r.paidBy
+      )
       ===
-      normalizeName(petty.holder)
+      normalizeName(
+        petty.holder
+      )
     ){
-      allDates.add(r.date);
+
+      allDates.add(
+        r.date
+      );
+
     }
+
   });
 
 
@@ -554,7 +1170,8 @@ function getOpeningForDate(petty,date){
     Sort dates chronologically.
   */
 
-  const dates=[...allDates].sort();
+  const dates=
+    [...allDates].sort();
 
 
   /*
@@ -592,7 +1209,10 @@ function getOpeningForDate(petty,date){
    PETTY FIGURES
    ===================================================== */
 
-function pettyFigures(petty,date=selectedDate()){
+function pettyFigures(
+  petty,
+  date=selectedDate()
+){
 
   const opening=
     getOpeningForDate(
@@ -624,6 +1244,7 @@ function pettyFigures(petty,date=selectedDate()){
   */
 
   let manualReceived=0;
+
   let manualExpenses=0;
 
 
@@ -632,15 +1253,21 @@ function pettyFigures(petty,date=selectedDate()){
     manually entered petty cash values.
   */
 
-  const baseDate=state.date;
+  const baseDate=
+    state.date;
+
 
   if(date===baseDate){
 
     manualReceived=
-      num(petty.received);
+      num(
+        petty.received
+      );
 
     manualExpenses=
-      num(petty.expenses);
+      num(
+        petty.expenses
+      );
 
   }
 
@@ -697,7 +1324,9 @@ document.addEventListener(
   ()=>{
 
     const reportDate=
-      document.getElementById("reportDate");
+      document.getElementById(
+        "reportDate"
+      );
 
 
     /*
@@ -721,7 +1350,8 @@ document.addEventListener(
       "change",
       e=>{
 
-        state.date=e.target.value;
+        state.date=
+          e.target.value;
 
         save();
 
@@ -735,7 +1365,8 @@ document.addEventListener(
 
     document.getElementById(
       "remarksInput"
-    ).value=state.remarks;
+    ).value=
+      state.remarks;
 
 
     document.getElementById(
@@ -758,7 +1389,9 @@ document.addEventListener(
     */
 
     document
-      .querySelectorAll(".nav-btn")
+      .querySelectorAll(
+        ".nav-btn"
+      )
       .forEach(b=>
 
         b.addEventListener(
@@ -766,24 +1399,36 @@ document.addEventListener(
           ()=>{
 
             document
-              .querySelectorAll(".nav-btn")
+              .querySelectorAll(
+                ".nav-btn"
+              )
               .forEach(x=>
-                x.classList.remove("active")
+                x.classList.remove(
+                  "active"
+                )
               );
 
             document
-              .querySelectorAll(".section")
+              .querySelectorAll(
+                ".section"
+              )
               .forEach(x=>
-                x.classList.remove("active")
+                x.classList.remove(
+                  "active"
+                )
               );
 
-            b.classList.add("active");
+            b.classList.add(
+              "active"
+            );
 
             document
               .getElementById(
                 b.dataset.section
               )
-              .classList.add("active");
+              .classList.add(
+                "active"
+              );
 
           }
         )
@@ -800,8 +1445,12 @@ document.addEventListener(
     ).onclick=()=>{
 
       document
-        .getElementById("printModal")
-        .classList.remove("hidden");
+        .getElementById(
+          "printModal"
+        )
+        .classList.remove(
+          "hidden"
+        );
 
     };
 
@@ -829,8 +1478,12 @@ document.addEventListener(
     ).onclick=()=>{
 
       document
-        .getElementById("printModal")
-        .classList.add("hidden");
+        .getElementById(
+          "printModal"
+        )
+        .classList.add(
+          "hidden"
+        );
 
     };
 
@@ -840,8 +1493,12 @@ document.addEventListener(
     ).onclick=()=>{
 
       document
-        .getElementById("printModal")
-        .classList.add("hidden");
+        .getElementById(
+          "printModal"
+        )
+        .classList.add(
+          "hidden"
+        );
 
       printSelected([
         "summary",
@@ -865,12 +1522,18 @@ document.addEventListener(
         ...document.querySelectorAll(
           ".print-check:checked"
         )
-      ].map(x=>x.value);
+      ].map(
+        x=>x.value
+      );
 
 
       document
-        .getElementById("printModal")
-        .classList.add("hidden");
+        .getElementById(
+          "printModal"
+        )
+        .classList.add(
+          "hidden"
+        );
 
 
       printSelected(a);
@@ -879,6 +1542,21 @@ document.addEventListener(
 
 
     renderAll();
+
+
+    /*
+      Start the automatic Google Drive backup
+      AFTER the application has rendered.
+
+      This does not change the visible layout.
+    */
+
+    setTimeout(
+      ()=>{
+        automaticDailyBackup();
+      },
+      1500
+    );
 
   }
 );
@@ -967,7 +1645,10 @@ function addBank(){
    PETTY CASH STATUS
    ===================================================== */
 
-function setPettyStatus(i,status){
+function setPettyStatus(
+  i,
+  status
+){
 
   if(!state.petty[i]) return;
 
@@ -994,11 +1675,14 @@ function updateArray(
     !state[type] ||
     !state[type][i]
   ){
+
     return;
+
   }
 
 
-  state[type][i][key]=value;
+  state[type][i][key]=
+    value;
 
 
   /*
@@ -1007,7 +1691,12 @@ function updateArray(
   */
 
   if(
-    ["cash","expenses","jobs","bank"].includes(type)
+    [
+      "cash",
+      "expenses",
+      "jobs",
+      "bank"
+    ].includes(type)
     &&
     !state[type][i].date
   ){
@@ -1023,11 +1712,17 @@ function updateArray(
 }
 
 
-function del(type,i){
+function del(
+  type,
+  i
+){
 
   if(!state[type]) return;
 
-  state[type].splice(i,1);
+  state[type].splice(
+    i,
+    1
+  );
 
   save();
 
@@ -1047,7 +1742,9 @@ function renderJobs(){
 
 
   const daily=
-    getDaily("jobs");
+    getDaily(
+      "jobs"
+    );
 
 
   el.innerHTML=`
@@ -1079,7 +1776,9 @@ function renderJobs(){
     daily.map((r)=>{
 
       const i=
-        state.jobs.indexOf(r);
+        state.jobs.indexOf(
+          r
+        );
 
       return `
 
@@ -1259,7 +1958,9 @@ function renderJobs(){
 function renderCash(){
 
   const daily=
-    getDaily("cash");
+    getDaily(
+      "cash"
+    );
 
 
   document.getElementById(
@@ -1291,7 +1992,9 @@ function renderCash(){
     daily.map(r=>{
 
       const i=
-        state.cash.indexOf(r);
+        state.cash.indexOf(
+          r
+        );
 
       return `
 
@@ -1411,7 +2114,9 @@ function renderCash(){
 function renderExpenses(){
 
   const daily=
-    getDaily("expenses");
+    getDaily(
+      "expenses"
+    );
 
 
   document.getElementById(
@@ -1443,7 +2148,9 @@ function renderExpenses(){
     daily.map(r=>{
 
       const i=
-        state.expenses.indexOf(r);
+        state.expenses.indexOf(
+          r
+        );
 
       return `
 
@@ -1563,7 +2270,9 @@ function renderExpenses(){
 function renderBank(){
 
   const daily=
-    getDaily("bank");
+    getDaily(
+      "bank"
+    );
 
 
   document.getElementById(
@@ -1596,7 +2305,9 @@ function renderBank(){
     daily.map(r=>{
 
       const i=
-        state.bank.indexOf(r);
+        state.bank.indexOf(
+          r
+        );
 
       return `
 
@@ -1767,7 +2478,10 @@ function renderPetty(){
     state.petty.map((r,i)=>{
 
       const figures=
-        pettyFigures(r,date);
+        pettyFigures(
+          r,
+          date
+        );
 
 
       return `
@@ -1896,7 +2610,10 @@ function renderPetty(){
    UPDATE BASE OPENING
    ===================================================== */
 
-function updateBaseOpening(i,value){
+function updateBaseOpening(
+  i,
+  value
+){
 
   if(!state.petty[i]) return;
 
@@ -1926,7 +2643,9 @@ function rowsDaily(
 ){
 
   const daily=
-    getDaily(type);
+    getDaily(
+      type
+    );
 
 
   return daily.length
@@ -1952,42 +2671,57 @@ function renderPreview(){
   */
 
   const dailyCash=
-    getDaily("cash");
+    getDaily(
+      "cash"
+    );
 
   const dailyBank=
-    getDaily("bank");
+    getDaily(
+      "bank"
+    );
 
   const dailyExpenses=
-    getDaily("expenses");
+    getDaily(
+      "expenses"
+    );
 
 
   const cashTotal=
     dailyCash.reduce(
-      (a,r)=>a+num(r.amount),
+      (a,r)=>
+        a+num(r.amount),
       0
     );
 
 
   const bankTotal=
     dailyBank.reduce(
-      (a,r)=>a+num(r.amount),
+      (a,r)=>
+        a+num(r.amount),
       0
     );
 
 
   const expenseTotal=
     dailyExpenses.reduce(
-      (a,r)=>a+num(r.amount),
+      (a,r)=>
+        a+num(r.amount),
       0
     );
 
 
   const pettyTotal=
     state.petty
-      .filter(r=>r.active)
+      .filter(
+        r=>r.active
+      )
       .reduce(
         (a,r)=>
-          a+pettyFigures(r,date).closing,
+          a+
+          pettyFigures(
+            r,
+            date
+          ).closing,
         0
       );
 
@@ -2024,28 +2758,40 @@ function renderPreview(){
     "paperCash"
   ).textContent=
     money(cashTotal)
-      .replace("AED ","");
+      .replace(
+        "AED ",
+        ""
+      );
 
 
   document.getElementById(
     "paperBank"
   ).textContent=
     money(bankTotal)
-      .replace("AED ","");
+      .replace(
+        "AED ",
+        ""
+      );
 
 
   document.getElementById(
     "paperExpenses"
   ).textContent=
     money(expenseTotal)
-      .replace("AED ","");
+      .replace(
+        "AED ",
+        ""
+      );
 
 
   document.getElementById(
     "paperPetty"
   ).textContent=
     money(pettyTotal)
-      .replace("AED ","");
+      .replace(
+        "AED ",
+        ""
+      );
 
 
   /* =================================================
@@ -2243,7 +2989,9 @@ function renderPreview(){
   ).innerHTML=
 
     active.length
-      ? active.map(pettyRows).join("")
+      ? active.map(
+          pettyRows
+        ).join("")
       : emptyRow(5);
 
 
@@ -2252,7 +3000,9 @@ function renderPreview(){
   ).innerHTML=
 
     inactive.length
-      ? inactive.map(pettyRows).join("")
+      ? inactive.map(
+          pettyRows
+        ).join("")
       : emptyRow(5);
 
 
@@ -2301,7 +3051,9 @@ function renderAll(){
    PRINT
    ===================================================== */
 
-function printSelected(sections){
+function printSelected(
+  sections
+){
 
   /*
     Make absolutely sure the printed report uses the
@@ -2312,7 +3064,8 @@ function printSelected(sections){
     selectedDate();
 
 
-  state.date=date;
+  state.date=
+    date;
 
 
   renderPreview();
@@ -2446,4 +3199,3 @@ function printSelected(sections){
   },500);
 
 }
-

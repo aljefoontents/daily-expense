@@ -1563,7 +1563,54 @@ document.addEventListener(
 
 
 /* =====================================================
-   ADD
+   AUTO JOB NUMBER
+   ===================================================== */
+
+function getNextJobNumber(){
+
+  const START_NUMBER=440;
+
+  let highest=START_NUMBER-1;
+
+  state.jobs.forEach(job=>{
+
+    const match=
+      String(job.jobNo||"")
+        .trim()
+        .toUpperCase()
+        .match(/^JB(\d+)$/);
+
+    if(match){
+
+      const number=
+        parseInt(
+          match[1],
+          10
+        );
+
+      if(
+        Number.isFinite(number) &&
+        number>highest
+      ){
+
+        highest=number;
+
+      }
+
+    }
+
+  });
+
+
+  return "JB"+
+    String(highest+1)
+      .padStart(4,"0");
+
+}
+
+
+/* =====================================================
+   ADD JOB
    ===================================================== */
 
 function addJob(){
@@ -1572,12 +1619,18 @@ function addJob(){
 
     date:selectedDate(),
 
-    jobNo:"",
+    jobNo:getNextJobNumber(),
+
     client:"",
+
     description:"",
+
     total:0,
+
     cash:0,
+
     incharge:"",
+
     status:"Pending"
 
   });

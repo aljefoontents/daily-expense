@@ -13,7 +13,7 @@ const KEY="alJefoonDailyExpenseReportV1";
    ===================================================== */
 
 const GOOGLE_SHEETS_BACKUP_URL =
-  "PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE";
+  "https://script.google.com/macros/s/AKfycbxIbk9ltodS6rKoYiVu7INA7kE05mEA5vDW4Lm8FMM5fl4fLeOKHja8fPeAiIVyP-zHpA/exec";
 
 
 const holders=[

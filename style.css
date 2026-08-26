@@ -20,6 +20,18 @@ nav{display:flex;flex-direction:column;gap:6px}.nav-btn{background:transparent;b
   min-width:110px;
   font-weight:700;
   border-radius:6px;
+
+  /* =====================================================
+   PRINT OPTIONS FIX
+   ===================================================== */
+
+@media print {
+
+  .hidden-print {
+    display: none !important;
+  }
+
+}
   padding:6px 8px;
   cursor:pointer;
 }

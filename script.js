@@ -856,11 +856,16 @@ function normalizeName(value){
 }
 
 
-function sameDate(a,b){
+state.date =
+  todayString();
 
-  return String(a||"")===String(b||"");
+reportDate.value =
+  state.date;
 
-}
+localStorage.setItem(
+  KEY,
+  JSON.stringify(state)
+);
 
 
 /* =====================================================

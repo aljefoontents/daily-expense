@@ -1,5 +1,21 @@
 const KEY="alJefoonDailyExpenseReportV1";
 
+/* =====================================================
+   GOOGLE SHEETS BACKUP
+   =====================================================
+
+   Replace the URL below with your deployed
+   Google Apps Script Web App URL.
+
+   Example:
+   https://script.google.com/macros/s/XXXXXXXXXXXX/exec
+
+   ===================================================== */
+
+const GOOGLE_SHEETS_BACKUP_URL =
+  "PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE";
+
+
 const holders=[
   {name:"Ali",active:true},
   {name:"Saud",active:true},
@@ -18,27 +34,43 @@ let state=load();
    ===================================================== */
 
 function todayString(){
+
   const d=new Date();
+
   const y=d.getFullYear();
-  const m=String(d.getMonth()+1).padStart(2,"0");
-  const day=String(d.getDate()).padStart(2,"0");
+
+  const m=
+    String(d.getMonth()+1)
+      .padStart(2,"0");
+
+  const day=
+    String(d.getDate())
+      .padStart(2,"0");
 
   return `${y}-${m}-${day}`;
+
 }
+
 
 function formatDate(date){
 
   if(!date) return "";
 
-  const parts=String(date).split("-");
+  const parts=
+    String(date).split("-");
 
-  if(parts.length!==3) return date;
+  if(parts.length!==3)
+    return date;
 
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
+
 }
 
+
 function dateValue(date){
+
   return String(date||"");
+
 }
 
 
@@ -49,6 +81,7 @@ function dateValue(date){
 function defaultState(){
 
   return {
+
     date:todayString(),
 
     jobs:[],
@@ -57,29 +90,25 @@ function defaultState(){
     bank:[],
 
     petty:holders.map(h=>({
+
       holder:h.name,
 
-      /*
-        baseOpening is the ORIGINAL opening balance.
-        Future days automatically use the previous day's
-        closing balance.
-      */
       baseOpening:0,
 
-      /*
-        Keep old opening field for compatibility with
-        existing saved data.
-      */
       opening:0,
 
       received:0,
+
       expenses:0,
 
       active:h.active
+
     })),
 
     remarks:""
+
   };
+
 }
 
 
@@ -91,43 +120,56 @@ function load(){
 
   try{
 
-    const saved=JSON.parse(
-      localStorage.getItem(KEY)
-    );
+    const saved=
+      JSON.parse(
+        localStorage.getItem(KEY)
+      );
 
-    const base=defaultState();
+    const base=
+      defaultState();
 
-    if(!saved) return base;
-
-
-    /* Arrays */
-
-    saved.cash=Array.isArray(saved.cash)
-      ? saved.cash
-      : [];
-
-    saved.expenses=Array.isArray(saved.expenses)
-      ? saved.expenses
-      : [];
-
-    saved.jobs=Array.isArray(saved.jobs)
-      ? saved.jobs
-      : [];
-
-    saved.bank=Array.isArray(saved.bank)
-      ? saved.bank
-      : [];
-
-    saved.petty=Array.isArray(saved.petty)
-      ? saved.petty
-      : base.petty;
+    if(!saved)
+      return base;
 
 
-    /* Date */
+    saved.cash=
+      Array.isArray(saved.cash)
+        ? saved.cash
+        : [];
 
-    saved.date=saved.date||base.date;
 
-    saved.remarks=saved.remarks||"";
+    saved.expenses=
+      Array.isArray(saved.expenses)
+        ? saved.expenses
+        : [];
+
+
+    saved.jobs=
+      Array.isArray(saved.jobs)
+        ? saved.jobs
+        : [];
+
+
+    saved.bank=
+      Array.isArray(saved.bank)
+        ? saved.bank
+        : [];
+
+
+    saved.petty=
+      Array.isArray(saved.petty)
+        ? saved.petty
+        : base.petty;
+
+
+    saved.date=
+      saved.date ||
+      base.date;
+
+
+    saved.remarks=
+      saved.remarks ||
+      "";
 
 
     /* =================================================
@@ -136,27 +178,51 @@ function load(){
 
     saved.petty.forEach(p=>{
 
-      if(typeof p.baseOpening==="undefined"){
+      if(
+        typeof p.baseOpening===
+        "undefined"
+      ){
 
-        p.baseOpening=num(
-          typeof p.opening!=="undefined"
-            ? p.opening
-            : 0
-        );
+        p.baseOpening=
+          num(
+            typeof p.opening!=="undefined"
+              ? p.opening
+              : 0
+          );
 
       }
 
-      if(typeof p.opening==="undefined"){
-        p.opening=p.baseOpening;
+
+      if(
+        typeof p.opening===
+        "undefined"
+      ){
+
+        p.opening=
+          p.baseOpening;
+
       }
 
-      if(typeof p.received==="undefined"){
+
+      if(
+        typeof p.received===
+        "undefined"
+      ){
+
         p.received=0;
+
       }
 
-      if(typeof p.expenses==="undefined"){
+
+      if(
+        typeof p.expenses===
+        "undefined"
+      ){
+
         p.expenses=0;
+
       }
+
 
       p.active=
         typeof p.active==="boolean"
@@ -172,22 +238,31 @@ function load(){
 
     holders.forEach(h=>{
 
-      const exists=saved.petty.some(
-        p=>
-          normalizeName(p.holder)
-          ===
-          normalizeName(h.name)
-      );
+      const exists=
+        saved.petty.some(
+          p=>
+            normalizeName(p.holder)
+            ===
+            normalizeName(h.name)
+        );
+
 
       if(!exists){
 
         saved.petty.push({
+
           holder:h.name,
+
           baseOpening:0,
+
           opening:0,
+
           received:0,
+
           expenses:0,
+
           active:h.active
+
         });
 
       }
@@ -196,46 +271,72 @@ function load(){
 
 
     /*
-      Existing transactions from the old version did not
-      have a date.
-
-      Assign them to the saved report date so they do not
-      disappear after the new date filtering is enabled.
+      Old transactions without dates
+      are assigned to the saved report date.
     */
 
     saved.cash.forEach(r=>{
+
       if(!r.date){
-        r.date=saved.date;
+
+        r.date=
+          saved.date;
+
       }
+
     });
+
 
     saved.expenses.forEach(r=>{
+
       if(!r.date){
-        r.date=saved.date;
+
+        r.date=
+          saved.date;
+
       }
+
     });
+
 
     saved.jobs.forEach(r=>{
+
       if(!r.date){
-        r.date=saved.date;
+
+        r.date=
+          saved.date;
+
       }
+
     });
 
+
     saved.bank.forEach(r=>{
+
       if(!r.date){
-        r.date=saved.date;
+
+        r.date=
+          saved.date;
+
       }
+
     });
 
 
     return saved;
 
+
   }catch(e){
 
-    console.error("Load error:",e);
+    console.error(
+      "Load error:",
+      e
+    );
 
     return defaultState();
+
   }
+
 }
 
 
@@ -251,6 +352,7 @@ function save(){
   );
 
   renderAll();
+
 }
 
 
@@ -263,11 +365,13 @@ function esc(v){
   return String(v??"").replace(
     /[&<>"']/g,
     m=>({
+
       "&":"&amp;",
       "<":"&lt;",
       ">":"&gt;",
       '"':"&quot;",
       "'":"&#039;"
+
     }[m])
   );
 
@@ -276,27 +380,25 @@ function esc(v){
 
 function money(n){
 
-  return "AED "+Number(n||0).toLocaleString(
-    "en-AE",
-    {
-      minimumFractionDigits:2,
-      maximumFractionDigits:2
-    }
-  );
+  return "AED "+
+    Number(n||0).toLocaleString(
+      "en-AE",
+      {
+
+        minimumFractionDigits:2,
+
+        maximumFractionDigits:2
+
+      }
+    );
 
 }
 
 
 function num(v){
 
-  /*
-    IMPORTANT:
-    Number("-27") correctly returns -27.
-    The old application therefore supports negative
-    numbers.
-  */
-
-  const n=Number(v);
+  const n=
+    Number(v);
 
   return Number.isFinite(n)
     ? n
@@ -305,15 +407,26 @@ function num(v){
 }
 
 
-function emptyRow(cols,msg="No entries"){
+function emptyRow(
+  cols,
+  msg="No entries"
+){
 
   return `
+
     <tr>
-      <td colspan="${cols}"
-          style="text-align:center;color:#777">
+
+      <td
+        colspan="${cols}"
+        style="text-align:center;color:#777"
+      >
+
         ${msg}
+
       </td>
+
     </tr>
+
   `;
 
 }
@@ -330,7 +443,8 @@ function normalizeName(value){
 
 function sameDate(a,b){
 
-  return String(a||"")===String(b||"");
+  return String(a||"")===
+         String(b||"");
 
 }
 
@@ -341,13 +455,25 @@ function sameDate(a,b){
 
 function selectedDate(){
 
-  const input=document.getElementById("reportDate");
+  const input=
+    document.getElementById(
+      "reportDate"
+    );
 
-  if(input && input.value){
+
+  if(
+    input &&
+    input.value
+  ){
+
     return input.value;
+
   }
 
-  return state.date||todayString();
+
+  return state.date ||
+         todayString();
+
 }
 
 
@@ -355,10 +481,19 @@ function selectedDate(){
    FILTER TRANSACTIONS BY REPORT DATE
    ===================================================== */
 
-function getDaily(type,date=selectedDate()){
+function getDaily(
+  type,
+  date=selectedDate()
+){
 
-  return (state[type]||[]).filter(
-    r=>sameDate(r.date,date)
+  return (
+    state[type]||[]
+  ).filter(
+    r=>
+      sameDate(
+        r.date,
+        date
+      )
   );
 
 }
@@ -368,74 +503,104 @@ function getDaily(type,date=selectedDate()){
    PETTY CASH
    ===================================================== */
 
-/*
-  Find petty holder.
-*/
-
 function findPettyHolder(name){
 
-  const target=normalizeName(name);
+  const target=
+    normalizeName(name);
 
-  if(!target) return null;
+
+  if(!target)
+    return null;
+
 
   return state.petty.find(
-    p=>normalizeName(p.holder)===target
+    p=>
+      normalizeName(p.holder)===
+      target
   )||null;
 
 }
 
 
-/*
-  Get all cash received by a holder on a particular day.
-*/
+/* =====================================================
+   AUTOMATIC RECEIVED
+   ===================================================== */
 
-function automaticReceived(holderName,date){
+function automaticReceived(
+  holderName,
+  date
+){
 
-  return getDaily("cash",date).reduce(
+  return getDaily(
+    "cash",
+    date
+  ).reduce(
+
     (total,r)=>{
 
       if(
-        normalizeName(r.receivedBy)
-        ===
-        normalizeName(holderName)
+        normalizeName(
+          r.receivedBy
+        )===
+        normalizeName(
+          holderName
+        )
       ){
 
-        return total+num(r.amount);
+        return total+
+               num(r.amount);
 
       }
+
 
       return total;
 
     },
+
     0
+
   );
 
 }
 
 
-/*
-  Get all expenses paid by a holder on a particular day.
-*/
+/* =====================================================
+   AUTOMATIC EXPENSES
+   ===================================================== */
 
-function automaticExpenses(holderName,date){
+function automaticExpenses(
+  holderName,
+  date
+){
 
-  return getDaily("expenses",date).reduce(
+  return getDaily(
+    "expenses",
+    date
+  ).reduce(
+
     (total,r)=>{
 
       if(
-        normalizeName(r.paidBy)
-        ===
-        normalizeName(holderName)
+        normalizeName(
+          r.paidBy
+        )===
+        normalizeName(
+          holderName
+        )
       ){
 
-        return total+num(r.amount);
+        return total+
+               num(r.amount);
 
       }
+
 
       return total;
 
     },
+
     0
+
   );
 
 }
@@ -447,13 +612,32 @@ function automaticExpenses(holderName,date){
 
 function previousDate(date){
 
-  const d=new Date(date+"T12:00:00");
+  const d=
+    new Date(
+      date+"T12:00:00"
+    );
 
-  d.setDate(d.getDate()-1);
 
-  const y=d.getFullYear();
-  const m=String(d.getMonth()+1).padStart(2,"0");
-  const day=String(d.getDate()).padStart(2,"0");
+  d.setDate(
+    d.getDate()-1
+  );
+
+
+  const y=
+    d.getFullYear();
+
+
+  const m=
+    String(
+      d.getMonth()+1
+    ).padStart(2,"0");
+
+
+  const day=
+    String(
+      d.getDate()
+    ).padStart(2,"0");
+
 
   return `${y}-${m}-${day}`;
 
@@ -461,16 +645,27 @@ function previousDate(date){
 
 
 /* =====================================================
-   CHECK IF A DATE HAS ANY PETTY ACTIVITY
+   CHECK PETTY ACTIVITY
    ===================================================== */
 
-function hasPettyActivity(holder,date){
+function hasPettyActivity(
+  holder,
+  date
+){
 
   const cashReceived=
-    automaticReceived(holder,date);
+    automaticReceived(
+      holder,
+      date
+    );
+
 
   const expensesPaid=
-    automaticExpenses(holder,date);
+    automaticExpenses(
+      holder,
+      date
+    );
+
 
   return cashReceived!==0 ||
          expensesPaid!==0;
@@ -482,84 +677,82 @@ function hasPettyActivity(holder,date){
    FIND PREVIOUS KNOWN PETTY BALANCE
    ===================================================== */
 
-/*
-  This is the important part.
+function getOpeningForDate(
+  petty,
+  date
+){
 
-  Example:
-
-  21 Aug:
-  Opening 20
-  Expense 10
-  Closing 10
-
-  22 Aug:
-  Opening automatically becomes 10.
-
-  22 Aug:
-  Expense 5
-  Closing becomes 5
-
-  23 Aug:
-  Opening automatically becomes 5.
-*/
-
-function getOpeningForDate(petty,date){
-
-  const targetDate=date;
-
-  /*
-    First look at the holder's original/base opening.
-  */
-
-  let balance=num(
-    typeof petty.baseOpening!=="undefined"
-      ? petty.baseOpening
-      : petty.opening
-  );
+  const targetDate=
+    date;
 
 
-  /*
-    We need to calculate all daily movements before
-    the selected date.
-  */
+  let balance=
+    num(
+      typeof petty.baseOpening!=="undefined"
+        ? petty.baseOpening
+        : petty.opening
+    );
 
-  const allDates=new Set();
+
+  const allDates=
+    new Set();
+
 
   state.cash.forEach(r=>{
+
     if(
+
       r.date &&
       r.date<targetDate &&
-      normalizeName(r.receivedBy)
-      ===
-      normalizeName(petty.holder)
+
+      normalizeName(
+        r.receivedBy
+      )===
+
+      normalizeName(
+        petty.holder
+      )
+
     ){
-      allDates.add(r.date);
+
+      allDates.add(
+        r.date
+      );
+
     }
+
   });
+
 
   state.expenses.forEach(r=>{
+
     if(
+
       r.date &&
       r.date<targetDate &&
-      normalizeName(r.paidBy)
-      ===
-      normalizeName(petty.holder)
+
+      normalizeName(
+        r.paidBy
+      )===
+
+      normalizeName(
+        petty.holder
+      )
+
     ){
-      allDates.add(r.date);
+
+      allDates.add(
+        r.date
+      );
+
     }
+
   });
 
 
-  /*
-    Sort dates chronologically.
-  */
+  const dates=
+    [...allDates].sort();
 
-  const dates=[...allDates].sort();
-
-
-  /*
-    Apply every day's movement.
-  */
 
   dates.forEach(date=>{
 
@@ -569,16 +762,18 @@ function getOpeningForDate(petty,date){
         date
       );
 
+
     const expenses=
       automaticExpenses(
         petty.holder,
         date
       );
 
+
     balance=
-      balance
-      +received
-      -expenses;
+      balance+
+      received-
+      expenses;
 
   });
 
@@ -592,7 +787,10 @@ function getOpeningForDate(petty,date){
    PETTY FIGURES
    ===================================================== */
 
-function pettyFigures(petty,date=selectedDate()){
+function pettyFigures(
+  petty,
+  date=selectedDate()
+){
 
   const opening=
     getOpeningForDate(
@@ -615,53 +813,46 @@ function pettyFigures(petty,date=selectedDate()){
     );
 
 
-  /*
-    Legacy manual values are only used on the original
-    saved date, so old data is not lost.
-
-    New petty cash movements should normally come from
-    Cash Received and Expenses.
-  */
-
   let manualReceived=0;
+
   let manualExpenses=0;
 
 
-  /*
-    If this is the first/base date, preserve any old
-    manually entered petty cash values.
-  */
+  const baseDate=
+    state.date;
 
-  const baseDate=state.date;
 
-  if(date===baseDate){
+  if(
+    date===baseDate
+  ){
 
     manualReceived=
-      num(petty.received);
+      num(
+        petty.received
+      );
+
 
     manualExpenses=
-      num(petty.expenses);
+      num(
+        petty.expenses
+      );
 
   }
 
 
   const received=
-    manualReceived
-    +
+    manualReceived+
     autoReceived;
 
 
   const expenses=
-    manualExpenses
-    +
+    manualExpenses+
     autoExpenses;
 
 
   const closing=
-    opening
-    +
-    received
-    -
+    opening+
+    received-
     expenses;
 
 
@@ -697,31 +888,40 @@ document.addEventListener(
   ()=>{
 
     const reportDate=
-      document.getElementById("reportDate");
+      document.getElementById(
+        "reportDate"
+      );
 
 
     /*
-      Set current saved report date.
+      IMPORTANT:
+      The app opens using the CURRENT DATE
+      if no previous date has been selected.
     */
+
+    if(
+      !state.date ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(
+        state.date
+      )
+    ){
+
+      state.date=
+        todayString();
+
+    }
+
 
     reportDate.value=
       state.date;
 
 
-    /*
-      IMPORTANT:
-
-      Changing the calendar changes the active report date.
-
-      The petty cash opening balance is recalculated
-      automatically from previous days.
-    */
-
     reportDate.addEventListener(
       "change",
       e=>{
 
-        state.date=e.target.value;
+        state.date=
+          e.target.value;
 
         save();
 
@@ -735,7 +935,8 @@ document.addEventListener(
 
     document.getElementById(
       "remarksInput"
-    ).value=state.remarks;
+    ).value=
+      state.remarks;
 
 
     document.getElementById(
@@ -766,24 +967,39 @@ document.addEventListener(
           ()=>{
 
             document
-              .querySelectorAll(".nav-btn")
+              .querySelectorAll(
+                ".nav-btn"
+              )
               .forEach(x=>
-                x.classList.remove("active")
+                x.classList.remove(
+                  "active"
+                )
               );
+
 
             document
-              .querySelectorAll(".section")
+              .querySelectorAll(
+                ".section"
+              )
               .forEach(x=>
-                x.classList.remove("active")
+                x.classList.remove(
+                  "active"
+                )
               );
 
-            b.classList.add("active");
+
+            b.classList.add(
+              "active"
+            );
+
 
             document
               .getElementById(
                 b.dataset.section
               )
-              .classList.add("active");
+              .classList.add(
+                "active"
+              );
 
           }
         )
@@ -800,8 +1016,12 @@ document.addEventListener(
     ).onclick=()=>{
 
       document
-        .getElementById("printModal")
-        .classList.remove("hidden");
+        .getElementById(
+          "printModal"
+        )
+        .classList.remove(
+          "hidden"
+        );
 
     };
 
@@ -811,6 +1031,7 @@ document.addEventListener(
     ).onclick=()=>{
 
       printSelected([
+
         "summary",
         "jobs",
         "cash",
@@ -819,6 +1040,7 @@ document.addEventListener(
         "petty",
         "inactive",
         "remarks"
+
       ]);
 
     };
@@ -829,8 +1051,12 @@ document.addEventListener(
     ).onclick=()=>{
 
       document
-        .getElementById("printModal")
-        .classList.add("hidden");
+        .getElementById(
+          "printModal"
+        )
+        .classList.add(
+          "hidden"
+        );
 
     };
 
@@ -840,10 +1066,16 @@ document.addEventListener(
     ).onclick=()=>{
 
       document
-        .getElementById("printModal")
-        .classList.add("hidden");
+        .getElementById(
+          "printModal"
+        )
+        .classList.add(
+          "hidden"
+        );
+
 
       printSelected([
+
         "summary",
         "jobs",
         "cash",
@@ -852,6 +1084,7 @@ document.addEventListener(
         "petty",
         "inactive",
         "remarks"
+
       ]);
 
     };
@@ -862,15 +1095,23 @@ document.addEventListener(
     ).onclick=()=>{
 
       const a=[
+
         ...document.querySelectorAll(
           ".print-check:checked"
         )
-      ].map(x=>x.value);
+
+      ].map(
+        x=>x.value
+      );
 
 
       document
-        .getElementById("printModal")
-        .classList.add("hidden");
+        .getElementById(
+          "printModal"
+        )
+        .classList.add(
+          "hidden"
+        );
 
 
       printSelected(a);
@@ -895,14 +1136,21 @@ function addJob(){
     date:selectedDate(),
 
     jobNo:"",
+
     client:"",
+
     description:"",
+
     total:0,
+
     cash:0,
+
     incharge:"",
+
     status:"Pending"
 
   });
+
 
   save();
 
@@ -916,11 +1164,15 @@ function addCash(){
     date:selectedDate(),
 
     from:"",
+
     jobNo:"",
+
     amount:0,
+
     receivedBy:""
 
   });
+
 
   save();
 
@@ -934,11 +1186,15 @@ function addExpense(){
     date:selectedDate(),
 
     paidTo:"",
+
     type:"",
+
     amount:0,
+
     paidBy:""
 
   });
+
 
   save();
 
@@ -952,11 +1208,15 @@ function addBank(){
     date:selectedDate(),
 
     reference:"",
+
     from:"",
+
     amount:0,
+
     remarks:""
 
   });
+
 
   save();
 
@@ -967,12 +1227,18 @@ function addBank(){
    PETTY CASH STATUS
    ===================================================== */
 
-function setPettyStatus(i,status){
+function setPettyStatus(
+  i,
+  status
+){
 
-  if(!state.petty[i]) return;
+  if(!state.petty[i])
+    return;
+
 
   state.petty[i].active=
     status==="active";
+
 
   save();
 
@@ -994,22 +1260,29 @@ function updateArray(
     !state[type] ||
     !state[type][i]
   ){
+
     return;
+
   }
 
 
-  state[type][i][key]=value;
+  state[type][i][key]=
+    value;
 
-
-  /*
-    If a transaction somehow does not have a date,
-    attach it to the currently selected dashboard date.
-  */
 
   if(
-    ["cash","expenses","jobs","bank"].includes(type)
+
+    [
+      "cash",
+      "expenses",
+      "jobs",
+      "bank"
+    ].includes(type)
+
     &&
+
     !state[type][i].date
+
   ){
 
     state[type][i].date=
@@ -1023,11 +1296,20 @@ function updateArray(
 }
 
 
-function del(type,i){
+function del(
+  type,
+  i
+){
 
-  if(!state[type]) return;
+  if(!state[type])
+    return;
 
-  state[type].splice(i,1);
+
+  state[type].splice(
+    i,
+    1
+  );
+
 
   save();
 
@@ -1076,16 +1358,18 @@ function renderJobs(){
   <tbody>
 
   ${
-    daily.map((r)=>{
+    daily.map(r=>{
 
       const i=
         state.jobs.indexOf(r);
+
 
       return `
 
       <tr>
 
       <td>
+
         <input
           value="${esc(r.jobNo)}"
           onchange="
@@ -1097,10 +1381,12 @@ function renderJobs(){
             )
           "
         >
+
       </td>
 
 
       <td>
+
         <input
           value="${esc(r.client)}"
           onchange="
@@ -1112,10 +1398,12 @@ function renderJobs(){
             )
           "
         >
+
       </td>
 
 
       <td>
+
         <input
           value="${esc(r.description)}"
           onchange="
@@ -1127,10 +1415,12 @@ function renderJobs(){
             )
           "
         >
+
       </td>
 
 
       <td>
+
         <input
           type="number"
           step="0.01"
@@ -1144,10 +1434,12 @@ function renderJobs(){
             )
           "
         >
+
       </td>
 
 
       <td>
+
         <input
           type="number"
           step="0.01"
@@ -1161,10 +1453,12 @@ function renderJobs(){
             )
           "
         >
+
       </td>
 
 
       <td>
+
         <input
           value="${esc(r.incharge)}"
           onchange="
@@ -1176,6 +1470,7 @@ function renderJobs(){
             )
           "
         >
+
       </td>
 
 
@@ -1220,10 +1515,15 @@ function renderJobs(){
         <button
           class="delete-btn"
           onclick="
-            del('jobs',${i})
+            del(
+              'jobs',
+              ${i}
+            )
           "
         >
+
           Delete
+
         </button>
 
       </td>
@@ -1284,7 +1584,6 @@ function renderCash(){
 
   </thead>
 
-
   <tbody>
 
   ${
@@ -1292,6 +1591,7 @@ function renderCash(){
 
       const i=
         state.cash.indexOf(r);
+
 
       return `
 
@@ -1372,10 +1672,15 @@ function renderCash(){
         <button
           class="delete-btn"
           onclick="
-            del('cash',${i})
+            del(
+              'cash',
+              ${i}
+            )
           "
         >
+
           Delete
+
         </button>
 
       </td>
@@ -1436,7 +1741,6 @@ function renderExpenses(){
 
   </thead>
 
-
   <tbody>
 
   ${
@@ -1444,6 +1748,7 @@ function renderExpenses(){
 
       const i=
         state.expenses.indexOf(r);
+
 
       return `
 
@@ -1524,10 +1829,15 @@ function renderExpenses(){
         <button
           class="delete-btn"
           onclick="
-            del('expenses',${i})
+            del(
+              'expenses',
+              ${i}
+            )
           "
         >
+
           Delete
+
         </button>
 
       </td>
@@ -1589,7 +1899,6 @@ function renderBank(){
 
   </thead>
 
-
   <tbody>
 
   ${
@@ -1597,6 +1906,7 @@ function renderBank(){
 
       const i=
         state.bank.indexOf(r);
+
 
       return `
 
@@ -1695,10 +2005,15 @@ function renderBank(){
         <button
           class="delete-btn"
           onclick="
-            del('bank',${i})
+            del(
+              'bank',
+              ${i}
+            )
           "
         >
+
           Delete
+
         </button>
 
       </td>
@@ -1760,14 +2075,16 @@ function renderPetty(){
 
   </thead>
 
-
   <tbody>
 
   ${
     state.petty.map((r,i)=>{
 
       const figures=
-        pettyFigures(r,date);
+        pettyFigures(
+          r,
+          date
+        );
 
 
       return `
@@ -1775,7 +2092,11 @@ function renderPetty(){
       <tr>
 
         <td>
-          <b>${esc(r.holder)}</b>
+
+          <b>
+            ${esc(r.holder)}
+          </b>
+
         </td>
 
 
@@ -1785,21 +2106,38 @@ function renderPetty(){
             type="number"
             step="0.01"
             value="${figures.opening}"
+
             ${
               date===state.date
-              ? `onchange="
-                  updateBaseOpening(
-                    ${i},
-                    num(this.value)
-                  )
-                "`
-              : "readonly"
+
+              ?
+
+              `onchange="
+                updateBaseOpening(
+                  ${i},
+                  num(this.value)
+                )
+              "`
+
+              :
+
+              "readonly"
+
             }
+
             title="${
               date===state.date
-                ? "Initial/base opening balance"
-                : "Automatically carried forward from previous days"
+
+              ?
+
+              "Initial/base opening balance"
+
+              :
+
+              "Automatically carried forward from previous days"
+
             }"
+
           >
 
         </td>
@@ -1843,17 +2181,20 @@ function renderPetty(){
         <td>
 
           <select
+
             class="status-select ${
               r.active
                 ? "status-active"
                 : "status-inactive"
             }"
+
             onchange="
               setPettyStatus(
                 ${i},
                 this.value
               )
             "
+
           >
 
             <option
@@ -1896,19 +2237,22 @@ function renderPetty(){
    UPDATE BASE OPENING
    ===================================================== */
 
-function updateBaseOpening(i,value){
+function updateBaseOpening(
+  i,
+  value
+){
 
-  if(!state.petty[i]) return;
+  if(!state.petty[i])
+    return;
+
 
   state.petty[i].baseOpening=
     num(value);
 
-  /*
-    Keep old opening field synchronized for compatibility.
-  */
 
   state.petty[i].opening=
     num(value);
+
 
   save();
 
@@ -1930,8 +2274,14 @@ function rowsDaily(
 
 
   return daily.length
-    ? daily.map(fn).join("")
-    : emptyRow(cols);
+
+    ?
+
+    daily.map(fn).join("")
+
+    :
+
+    emptyRow(cols);
 
 }
 
@@ -1946,16 +2296,13 @@ function renderPreview(){
     selectedDate();
 
 
-  /*
-    Only transactions belonging to the selected date
-    are included in the report.
-  */
-
   const dailyCash=
     getDaily("cash");
 
+
   const dailyBank=
     getDaily("bank");
+
 
   const dailyExpenses=
     getDaily("expenses");
@@ -1963,21 +2310,24 @@ function renderPreview(){
 
   const cashTotal=
     dailyCash.reduce(
-      (a,r)=>a+num(r.amount),
+      (a,r)=>
+        a+num(r.amount),
       0
     );
 
 
   const bankTotal=
     dailyBank.reduce(
-      (a,r)=>a+num(r.amount),
+      (a,r)=>
+        a+num(r.amount),
       0
     );
 
 
   const expenseTotal=
     dailyExpenses.reduce(
-      (a,r)=>a+num(r.amount),
+      (a,r)=>
+        a+num(r.amount),
       0
     );
 
@@ -1987,14 +2337,14 @@ function renderPreview(){
       .filter(r=>r.active)
       .reduce(
         (a,r)=>
-          a+pettyFigures(r,date).closing,
+          a+
+          pettyFigures(
+            r,
+            date
+          ).closing,
         0
       );
 
-
-  /*
-    Dashboard totals.
-  */
 
   document.getElementById(
     "sumCash"
@@ -2024,28 +2374,40 @@ function renderPreview(){
     "paperCash"
   ).textContent=
     money(cashTotal)
-      .replace("AED ","");
+      .replace(
+        "AED ",
+        ""
+      );
 
 
   document.getElementById(
     "paperBank"
   ).textContent=
     money(bankTotal)
-      .replace("AED ","");
+      .replace(
+        "AED ",
+        ""
+      );
 
 
   document.getElementById(
     "paperExpenses"
   ).textContent=
     money(expenseTotal)
-      .replace("AED ","");
+      .replace(
+        "AED ",
+        ""
+      );
 
 
   document.getElementById(
     "paperPetty"
   ).textContent=
     money(pettyTotal)
-      .replace("AED ","");
+      .replace(
+        "AED ",
+        ""
+      );
 
 
   /* =================================================
@@ -2058,15 +2420,22 @@ function renderPreview(){
 
     rowsDaily(
       "jobs",
+
       r=>`
 
         <tr>
 
-          <td>${esc(r.jobNo)}</td>
+          <td>
+            ${esc(r.jobNo)}
+          </td>
 
-          <td>${esc(r.client)}</td>
+          <td>
+            ${esc(r.client)}
+          </td>
 
-          <td>${esc(r.description)}</td>
+          <td>
+            ${esc(r.description)}
+          </td>
 
           <td class="num">
             ${num(r.total).toFixed(2)}
@@ -2076,14 +2445,20 @@ function renderPreview(){
             ${num(r.cash).toFixed(2)}
           </td>
 
-          <td>${esc(r.incharge)}</td>
+          <td>
+            ${esc(r.incharge)}
+          </td>
 
-          <td>${esc(r.status)}</td>
+          <td>
+            ${esc(r.status)}
+          </td>
 
         </tr>
 
       `,
+
       7
+
     );
 
 
@@ -2097,24 +2472,33 @@ function renderPreview(){
 
     rowsDaily(
       "cash",
+
       r=>`
 
         <tr>
 
-          <td>${esc(r.from)}</td>
+          <td>
+            ${esc(r.from)}
+          </td>
 
-          <td>${esc(r.jobNo)}</td>
+          <td>
+            ${esc(r.jobNo)}
+          </td>
 
           <td class="num">
             ${num(r.amount).toFixed(2)}
           </td>
 
-          <td>${esc(r.receivedBy)}</td>
+          <td>
+            ${esc(r.receivedBy)}
+          </td>
 
         </tr>
 
       `,
+
       4
+
     );
 
 
@@ -2128,24 +2512,33 @@ function renderPreview(){
 
     rowsDaily(
       "expenses",
+
       r=>`
 
         <tr>
 
-          <td>${esc(r.paidTo)}</td>
+          <td>
+            ${esc(r.paidTo)}
+          </td>
 
-          <td>${esc(r.type)}</td>
+          <td>
+            ${esc(r.type)}
+          </td>
 
           <td class="num">
             ${num(r.amount).toFixed(2)}
           </td>
 
-          <td>${esc(r.paidBy)}</td>
+          <td>
+            ${esc(r.paidBy)}
+          </td>
 
         </tr>
 
       `,
+
       4
+
     );
 
 
@@ -2159,26 +2552,37 @@ function renderPreview(){
 
     rowsDaily(
       "bank",
+
       r=>`
 
         <tr>
 
-          <td>${formatDate(r.date)}</td>
+          <td>
+            ${formatDate(r.date)}
+          </td>
 
-          <td>${esc(r.reference)}</td>
+          <td>
+            ${esc(r.reference)}
+          </td>
 
-          <td>${esc(r.from)}</td>
+          <td>
+            ${esc(r.from)}
+          </td>
 
           <td class="num">
             ${num(r.amount).toFixed(2)}
           </td>
 
-          <td>${esc(r.remarks)}</td>
+          <td>
+            ${esc(r.remarks)}
+          </td>
 
         </tr>
 
       `,
+
       5
+
     );
 
 
@@ -2243,8 +2647,16 @@ function renderPreview(){
   ).innerHTML=
 
     active.length
-      ? active.map(pettyRows).join("")
-      : emptyRow(5);
+
+      ?
+
+      active
+        .map(pettyRows)
+        .join("")
+
+      :
+
+      emptyRow(5);
 
 
   document.querySelector(
@@ -2252,8 +2664,16 @@ function renderPreview(){
   ).innerHTML=
 
     inactive.length
-      ? inactive.map(pettyRows).join("")
-      : emptyRow(5);
+
+      ?
+
+      inactive
+        .map(pettyRows)
+        .join("")
+
+      :
+
+      emptyRow(5);
 
 
   document.getElementById(
@@ -2283,16 +2703,354 @@ function renderAll(){
   renderPreview();
 
 
-  document.getElementById(
-    "reportDate"
-  ).value=
-    state.date;
+  const reportDate=
+    document.getElementById(
+      "reportDate"
+    );
 
 
-  document.getElementById(
-    "remarksInput"
-  ).value=
-    state.remarks;
+  if(reportDate){
+
+    reportDate.value=
+      state.date;
+
+  }
+
+
+  const remarks=
+    document.getElementById(
+      "remarksInput"
+    );
+
+
+  if(remarks){
+
+    remarks.value=
+      state.remarks;
+
+  }
+
+}
+
+
+/* =====================================================
+   GOOGLE SHEETS BACKUP
+   ===================================================== */
+
+/*
+   This function sends the COMPLETE current state
+   to Google Apps Script.
+
+   It uses the currently selected report date.
+
+   IMPORTANT:
+   The Google Apps Script must be deployed as:
+
+   Execute as: Me
+   Who has access: Anyone
+
+*/
+
+async function backupToGoogleSheets(){
+
+  const date=
+    selectedDate();
+
+
+  if(
+    !GOOGLE_SHEETS_BACKUP_URL ||
+    GOOGLE_SHEETS_BACKUP_URL.includes(
+      "PASTE_YOUR_GOOGLE_APPS_SCRIPT"
+    )
+  ){
+
+    alert(
+      "Please add your Google Apps Script Web App URL first."
+    );
+
+    return;
+
+  }
+
+
+  /*
+    Make sure the selected date is saved.
+  */
+
+  state.date=
+    date;
+
+
+  save();
+
+
+  /*
+    Create a clean copy of the data.
+
+    We do not send functions or DOM elements.
+  */
+
+  const backupData={
+
+    date:date,
+
+    reportDate:date,
+
+    jobs:Array.isArray(state.jobs)
+      ? state.jobs
+      : [],
+
+    cash:Array.isArray(state.cash)
+      ? state.cash
+      : [],
+
+    expenses:Array.isArray(state.expenses)
+      ? state.expenses
+      : [],
+
+    bank:Array.isArray(state.bank)
+      ? state.bank
+      : [],
+
+    petty:Array.isArray(state.petty)
+      ? state.petty.map(p=>{
+
+          const figures=
+            pettyFigures(
+              p,
+              date
+            );
+
+
+          return {
+
+            holder:p.holder,
+
+            opening:figures.opening,
+
+            received:figures.received,
+
+            expenses:figures.expenses,
+
+            closing:figures.closing,
+
+            active:Boolean(
+              p.active
+            ),
+
+            date:date
+
+          };
+
+        })
+
+      : [],
+
+    remarks:
+      state.remarks||""
+
+  };
+
+
+  /*
+    Show backup message.
+  */
+
+  showBackupStatus(
+    "Backing up..."
+  );
+
+
+  try{
+
+    const response=
+      await fetch(
+        GOOGLE_SHEETS_BACKUP_URL,
+        {
+
+          method:"POST",
+
+          headers:{
+            "Content-Type":
+              "text/plain;charset=utf-8"
+          },
+
+          body:
+            JSON.stringify(
+              backupData
+            )
+
+        }
+      );
+
+
+    const result=
+      await response.json();
+
+
+    if(
+      result &&
+      result.success
+    ){
+
+      showBackupStatus(
+        "Backup completed successfully."
+      );
+
+
+      alert(
+        "Daily Expense Report for " +
+        formatDate(date) +
+        " has been backed up to Google Sheets."
+      );
+
+
+    }else{
+
+      throw new Error(
+        result &&
+        result.message
+
+          ?
+
+        result.message
+
+          :
+
+        "Google Apps Script returned an error."
+      );
+
+    }
+
+
+  }catch(error){
+
+    console.error(
+      "Google Sheets backup error:",
+      error
+    );
+
+
+    showBackupStatus(
+      "Backup failed."
+    );
+
+
+    alert(
+      "Google Sheets backup failed.\n\n" +
+      "Please check your Google Apps Script Web App URL and deployment settings."
+    );
+
+  }
+
+}
+
+
+/* =====================================================
+   BACKUP STATUS
+   ===================================================== */
+
+function showBackupStatus(
+  message
+){
+
+  let status=
+    document.getElementById(
+      "googleBackupStatus"
+    );
+
+
+  /*
+    If the status element does not exist in HTML,
+    create it automatically.
+  */
+
+  if(!status){
+
+    status=
+      document.createElement(
+        "div"
+      );
+
+
+    status.id=
+      "googleBackupStatus";
+
+
+    status.style.position=
+      "fixed";
+
+
+    status.style.bottom=
+      "20px";
+
+
+    status.style.right=
+      "20px";
+
+
+    status.style.zIndex=
+      "99999";
+
+
+    status.style.padding=
+      "12px 18px";
+
+
+    status.style.background=
+      "#000";
+
+
+    status.style.color=
+      "#fff";
+
+
+    status.style.borderRadius=
+      "6px";
+
+
+    status.style.fontFamily=
+      "Arial, sans-serif";
+
+
+    status.style.fontSize=
+      "14px";
+
+
+    status.style.boxShadow=
+      "0 3px 12px rgba(0,0,0,.25)";
+
+
+    document.body.appendChild(
+      status
+    );
+
+  }
+
+
+  status.textContent=
+    message;
+
+
+  status.style.display=
+    "block";
+
+
+  clearTimeout(
+    status._hideTimer
+  );
+
+
+  status._hideTimer=
+    setTimeout(
+      ()=>{
+
+        status.style.display=
+          "none";
+
+      },
+      5000
+    );
 
 }
 
@@ -2301,18 +3059,21 @@ function renderAll(){
    PRINT
    ===================================================== */
 
-function printSelected(sections){
+function printSelected(
+  sections
+){
 
   /*
-    Make absolutely sure the printed report uses the
-    date currently selected in the Dashboard calendar.
+    Make absolutely sure the printed report uses
+    the currently selected dashboard date.
   */
 
   const date=
     selectedDate();
 
 
-  state.date=date;
+  state.date=
+    date;
 
 
   renderPreview();
@@ -2334,21 +3095,29 @@ function printSelected(sections){
 
   const map={
 
-    summary:".mini-summary",
+    summary:
+      ".mini-summary",
 
-    jobs:".report-block:nth-of-type(1)",
+    jobs:
+      ".report-block:nth-of-type(1)",
 
-    cash:".report-block:nth-of-type(2)",
+    cash:
+      ".report-block:nth-of-type(2)",
 
-    expenses:".report-block:nth-of-type(3)",
+    expenses:
+      ".report-block:nth-of-type(3)",
 
-    bank:".report-block:nth-of-type(4)",
+    bank:
+      ".report-block:nth-of-type(4)",
 
-    petty:".report-block:nth-of-type(5)",
+    petty:
+      ".report-block:nth-of-type(5)",
 
-    inactive:".report-block:nth-of-type(6)",
+    inactive:
+      ".report-block:nth-of-type(6)",
 
-    remarks:".report-block:nth-of-type(7)"
+    remarks:
+      ".report-block:nth-of-type(7)"
 
   };
 
@@ -2412,7 +3181,7 @@ function printSelected(sections){
 
 
   /*
-    Restore normal screen after printing.
+    Restore screen after printing.
   */
 
   setTimeout(()=>{
@@ -2446,4 +3215,3 @@ function printSelected(sections){
   },500);
 
 }
-

@@ -1030,100 +1030,197 @@ document.addEventListener(
       "printReportBtn"
     ).onclick=()=>{
 
-      printSelected([
+      /* =====================================================
+   PRINT
+   ===================================================== */
 
-        "summary",
-        "jobs",
-        "cash",
-        "expenses",
-        "bank",
-        "petty",
-        "inactive",
-        "remarks"
+function printSelected(sections){
 
-      ]);
+  /*
+    Make absolutely sure the printed report uses the
+    date currently selected in the Dashboard calendar.
+  */
 
-    };
+  const date = selectedDate();
 
+  state.date = date;
 
-    document.getElementById(
-      "closeModal"
-    ).onclick=()=>{
-
-      document
-        .getElementById(
-          "printModal"
-        )
-        .classList.add(
-          "hidden"
-        );
-
-    };
+  renderPreview();
 
 
-    document.getElementById(
-      "printFull"
-    ).onclick=()=>{
+  /*
+    Sections available for printing.
+  */
 
-      document
-        .getElementById(
-          "printModal"
-        )
-        .classList.add(
-          "hidden"
-        );
-
-
-      printSelected([
-
-        "summary",
-        "jobs",
-        "cash",
-        "expenses",
-        "bank",
-        "petty",
-        "inactive",
-        "remarks"
-
-      ]);
-
-    };
+  const all = [
+    "summary",
+    "jobs",
+    "cash",
+    "expenses",
+    "bank",
+    "petty",
+    "inactive",
+    "remarks"
+  ];
 
 
-    document.getElementById(
-      "printSelected"
-    ).onclick=()=>{
+  /*
+    Find the report sections directly by their headings.
+    This is more reliable than relying on nth-of-type().
+  */
 
-      const a=[
-
-        ...document.querySelectorAll(
-          ".print-check:checked"
-        )
-
-      ].map(
-        x=>x.value
-      );
+  const reportPaper =
+    document.querySelector(".report-paper");
 
 
-      document
-        .getElementById(
-          "printModal"
-        )
-        .classList.add(
-          "hidden"
-        );
+  if(!reportPaper){
+    window.print();
+    return;
+  }
 
 
-      printSelected(a);
+  /*
+    Summary section.
+  */
 
-    };
+  const summary =
+    reportPaper.querySelector(".mini-summary");
 
 
-    renderAll();
+  /*
+    All report blocks.
+
+    Order inside the report:
+
+    1. Daily Jobs
+    2. Cash Received
+    3. Expenses
+    4. Bank Transfers
+    5. Petty Cash
+    6. Inactive Petty Cash
+    7. Management Remarks
+  */
+
+  const blocks =
+    [...reportPaper.querySelectorAll(".report-block")];
+
+
+  const sectionElements = {
+
+    summary: summary,
+
+    jobs: blocks[0],
+
+    cash: blocks[1],
+
+    expenses: blocks[2],
+
+    bank: blocks[3],
+
+    petty: blocks[4],
+
+    inactive: blocks[5],
+
+    remarks: blocks[6]
+
+  };
+
+
+  /*
+    Add selected date to report title.
+  */
+
+  const reportTitle =
+    reportPaper.querySelector(".report-title");
+
+
+  const originalTitle =
+    reportTitle
+      ? reportTitle.innerHTML
+      : "";
+
+
+  if(reportTitle){
+
+    reportTitle.innerHTML =
+      `SUMMARY DASHBOARD
+       <span class="print-report-date">
+         — ${formatDate(date)}
+       </span>`;
 
   }
-);
 
+
+  /*
+    Hide every section that was NOT selected.
+  */
+
+  all.forEach(section => {
+
+    const element =
+      sectionElements[section];
+
+
+    if(!element) return;
+
+
+    if(sections.includes(section)){
+
+      element.classList.remove(
+        "hidden-print"
+      );
+
+    }else{
+
+      element.classList.add(
+        "hidden-print"
+      );
+
+    }
+
+  });
+
+
+  /*
+    Print the selected sections.
+  */
+
+  window.print();
+
+
+  /*
+    Restore the normal report after printing.
+  */
+
+  setTimeout(() => {
+
+    all.forEach(section => {
+
+      const element =
+        sectionElements[section];
+
+
+      if(element){
+
+        element.classList.remove(
+          "hidden-print"
+        );
+
+      }
+
+    });
+
+
+    if(reportTitle){
+
+      reportTitle.innerHTML =
+        originalTitle;
+
+    }
+
+  }, 1000);
+
+}
 
 /* =====================================================
    ADD

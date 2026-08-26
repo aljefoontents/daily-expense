@@ -21,19 +21,5 @@ nav{display:flex;flex-direction:column;gap:6px}.nav-btn{background:transparent;b
   font-weight:700;
   border-radius:6px;
 
-  /* =====================================================
-   PRINT OPTIONS FIX
-   ===================================================== */
-
-@media print {
-
-  .hidden-print {
-    display: none !important;
-  }
-
-}
-  padding:6px 8px;
-  cursor:pointer;
-}
 .status-active{border:1px solid #2e7d32;}
 .status-inactive{border:1px solid #c62828;}

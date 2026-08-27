@@ -552,6 +552,52 @@ function automaticReceived(
 
       }
 
+      return total;
+
+    },
+
+    0
+
+  );
+
+}
+
+
+/* =====================================================
+   AUTOMATIC CASH GIVEN / TRANSFERRED OUT
+   ===================================================== */
+
+function automaticCashGiven(
+  holderName,
+  date
+){
+
+  return getDaily(
+    "cash",
+    date
+  ).reduce(
+
+    (total,r)=>{
+
+      /*
+        If this holder is the person FROM whom
+        the cash was received, the amount must be
+        deducted from this holder's petty cash.
+      */
+
+      if(
+        normalizeName(
+          r.from
+        )===
+        normalizeName(
+          holderName
+        )
+      ){
+
+        return total+
+               num(r.amount);
+
+      }
 
       return total;
 
@@ -593,7 +639,6 @@ function automaticExpenses(
                num(r.amount);
 
       }
-
 
       return total;
 
@@ -660,6 +705,13 @@ function hasPettyActivity(
     );
 
 
+  const cashGiven=
+    automaticCashGiven(
+      holder,
+      date
+    );
+
+
   const expensesPaid=
     automaticExpenses(
       holder,
@@ -668,6 +720,7 @@ function hasPettyActivity(
 
 
   return cashReceived!==0 ||
+         cashGiven!==0 ||
          expensesPaid!==0;
 
 }
@@ -698,6 +751,10 @@ function getOpeningForDate(
     new Set();
 
 
+  /*
+    Cash received BY this holder.
+  */
+
   state.cash.forEach(r=>{
 
     if(
@@ -705,12 +762,22 @@ function getOpeningForDate(
       r.date &&
       r.date<targetDate &&
 
-      normalizeName(
-        r.receivedBy
-      )===
+      (
+        normalizeName(
+          r.receivedBy
+        )===
+        normalizeName(
+          petty.holder
+        )
 
-      normalizeName(
-        petty.holder
+        ||
+
+        normalizeName(
+          r.from
+        )===
+        normalizeName(
+          petty.holder
+        )
       )
 
     ){
@@ -723,6 +790,10 @@ function getOpeningForDate(
 
   });
 
+
+  /*
+    Expenses paid BY this holder.
+  */
 
   state.expenses.forEach(r=>{
 
@@ -763,6 +834,13 @@ function getOpeningForDate(
       );
 
 
+    const cashGiven=
+      automaticCashGiven(
+        petty.holder,
+        date
+      );
+
+
     const expenses=
       automaticExpenses(
         petty.holder,
@@ -773,6 +851,7 @@ function getOpeningForDate(
     balance=
       balance+
       received-
+      cashGiven-
       expenses;
 
   });
@@ -801,6 +880,13 @@ function pettyFigures(
 
   const autoReceived=
     automaticReceived(
+      petty.holder,
+      date
+    );
+
+
+  const autoCashGiven=
+    automaticCashGiven(
       petty.holder,
       date
     );
@@ -850,9 +936,33 @@ function pettyFigures(
     autoExpenses;
 
 
+  /*
+    Closing balance now correctly accounts for
+    cash transferred from this holder to another holder.
+
+    Example:
+
+    Fahad gives Saud AED 70
+
+    Fahad:
+      Opening 100
+      Received 0
+      Cash Given 70
+      Expenses 0
+      Closing 30
+
+    Saud:
+      Opening 100
+      Received 70
+      Cash Given 0
+      Expenses 0
+      Closing 170
+  */
+
   const closing=
     opening+
     received-
+    autoCashGiven-
     expenses;
 
 
@@ -865,6 +975,8 @@ function pettyFigures(
     manualExpenses,
 
     autoReceived,
+
+    autoCashGiven,
 
     autoExpenses,
 

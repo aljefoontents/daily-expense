@@ -735,55 +735,76 @@ function getOpeningForDate(
   date
 ){
 
-  const targetDate=
-    date;
+  const holderName =
+    normalizeName(petty.holder);
 
+  /*
+    Start from the holder's original/base opening balance.
+  */
 
-  let balance=
+  let balance =
     num(
-      typeof petty.baseOpening!=="undefined"
+      typeof petty.baseOpening !== "undefined"
         ? petty.baseOpening
         : petty.opening
     );
 
 
-  const allDates=
-    new Set();
-
-
   /*
-    Cash received BY this holder.
+    Collect every date before the selected date
+    where this holder had petty-cash activity.
   */
 
-  state.cash.forEach(r=>{
+  const allDates = new Set();
+
+
+  state.cash.forEach(r => {
+
+    if(!r.date)
+      return;
+
+
+    if(String(r.date) >= String(date))
+      return;
+
+
+    const receivedBy =
+      normalizeName(r.receivedBy);
+
+    const from =
+      normalizeName(r.from);
+
 
     if(
-
-      r.date &&
-      r.date<targetDate &&
-
-      (
-        normalizeName(
-          r.receivedBy
-        )===
-        normalizeName(
-          petty.holder
-        )
-
-        ||
-
-        normalizeName(
-          r.from
-        )===
-        normalizeName(
-          petty.holder
-        )
-      )
-
+      receivedBy === holderName ||
+      from === holderName
     ){
 
       allDates.add(
-        r.date
+        String(r.date)
+      );
+
+    }
+
+  });
+
+
+  state.expenses.forEach(r => {
+
+    if(!r.date)
+      return;
+
+
+    if(String(r.date) >= String(date))
+      return;
+
+
+    if(
+      normalizeName(r.paidBy) === holderName
+    ){
+
+      allDates.add(
+        String(r.date)
       );
 
     }
@@ -792,66 +813,40 @@ function getOpeningForDate(
 
 
   /*
-    Expenses paid BY this holder.
+    Process previous dates in chronological order.
   */
 
-  state.expenses.forEach(r=>{
-
-    if(
-
-      r.date &&
-      r.date<targetDate &&
-
-      normalizeName(
-        r.paidBy
-      )===
-
-      normalizeName(
-        petty.holder
-      )
-
-    ){
-
-      allDates.add(
-        r.date
-      );
-
-    }
-
-  });
-
-
-  const dates=
+  const dates =
     [...allDates].sort();
 
 
-  dates.forEach(date=>{
+  dates.forEach(previousDay => {
 
-    const received=
+    const received =
       automaticReceived(
         petty.holder,
-        date
+        previousDay
       );
 
 
-    const cashGiven=
+    const cashGiven =
       automaticCashGiven(
         petty.holder,
-        date
+        previousDay
       );
 
 
-    const expenses=
+    const expenses =
       automaticExpenses(
         petty.holder,
-        date
+        previousDay
       );
 
 
-    balance=
-      balance+
-      received-
-      cashGiven-
+    balance =
+      balance +
+      received -
+      cashGiven -
       expenses;
 
   });

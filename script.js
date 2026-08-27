@@ -2,14 +2,6 @@ const KEY="alJefoonDailyExpenseReportV1";
 
 /* =====================================================
    GOOGLE SHEETS BACKUP
-   =====================================================
-
-   Replace the URL below with your deployed
-   Google Apps Script Web App URL.
-
-   Example:
-   https://script.google.com/macros/s/XXXXXXXXXXXX/exec
-
    ===================================================== */
 
 const GOOGLE_SHEETS_BACKUP_URL =
@@ -25,6 +17,7 @@ const holders=[
   {name:"Parvaiz",active:false},
   {name:"Malik",active:false}
 ];
+
 
 let state=load();
 
@@ -233,47 +226,8 @@ function load(){
 
 
     /* =================================================
-       ADD MISSING HOLDERS
+       MIGRATE OLD CASH RECORDS
        ================================================= */
-
-    holders.forEach(h=>{
-
-      const exists=
-        saved.petty.some(
-          p=>
-            normalizeName(p.holder)
-            ===
-            normalizeName(h.name)
-        );
-
-
-      if(!exists){
-
-        saved.petty.push({
-
-          holder:h.name,
-
-          baseOpening:0,
-
-          opening:0,
-
-          received:0,
-
-          expenses:0,
-
-          active:h.active
-
-        });
-
-      }
-
-    });
-
-
-    /*
-      Old transactions without dates
-      are assigned to the saved report date.
-    */
 
     saved.cash.forEach(r=>{
 
@@ -284,8 +238,46 @@ function load(){
 
       }
 
+
+      /*
+        Old cash records did not have a type.
+
+        Therefore they are treated as normal
+        external cash receipts.
+      */
+
+      if(!r.type){
+
+        r.type="cash";
+
+      }
+
+
+      if(
+        typeof r.fromHolder===
+        "undefined"
+      ){
+
+        r.fromHolder="";
+
+      }
+
+
+      if(
+        typeof r.toHolder===
+        "undefined"
+      ){
+
+        r.toHolder="";
+
+      }
+
     });
 
+
+    /* =================================================
+       OTHER OLD TRANSACTIONS
+       ================================================= */
 
     saved.expenses.forEach(r=>{
 
@@ -317,6 +309,44 @@ function load(){
 
         r.date=
           saved.date;
+
+      }
+
+    });
+
+
+    /* =================================================
+       ADD MISSING HOLDERS
+       ================================================= */
+
+    holders.forEach(h=>{
+
+      const exists=
+        saved.petty.some(
+          p=>
+            normalizeName(p.holder)
+            ===
+            normalizeName(h.name)
+        );
+
+
+      if(!exists){
+
+        saved.petty.push({
+
+          holder:h.name,
+
+          baseOpening:0,
+
+          opening:0,
+
+          received:0,
+
+          expenses:0,
+
+          active:h.active
+
+        });
 
       }
 
@@ -523,10 +553,39 @@ function findPettyHolder(name){
 
 
 /* =====================================================
-   AUTOMATIC RECEIVED
+   CASH RECORD TYPE
    ===================================================== */
 
-function automaticReceived(
+function cashRecordType(r){
+
+  /*
+    Existing records without a type are
+    normal cash receipts.
+
+    "transfer" is the new petty cash
+    transfer type.
+  */
+
+  return String(
+    r.type||"cash"
+  ).toLowerCase()==="transfer"
+
+    ?
+
+  "transfer"
+
+    :
+
+  "cash";
+
+}
+
+
+/* =====================================================
+   NORMAL CASH RECEIVED
+   ===================================================== */
+
+function automaticCashReceived(
   holderName,
   date
 ){
@@ -537,6 +596,15 @@ function automaticReceived(
   ).reduce(
 
     (total,r)=>{
+
+      if(
+        cashRecordType(r)!=="cash"
+      ){
+
+        return total;
+
+      }
+
 
       if(
         normalizeName(
@@ -559,6 +627,125 @@ function automaticReceived(
 
     0
 
+  );
+
+}
+
+
+/* =====================================================
+   PETTY CASH TRANSFER IN
+   ===================================================== */
+
+function automaticTransferIn(
+  holderName,
+  date
+){
+
+  return getDaily(
+    "cash",
+    date
+  ).reduce(
+
+    (total,r)=>{
+
+      if(
+        cashRecordType(r)!=="transfer"
+      ){
+
+        return total;
+
+      }
+
+
+      if(
+        normalizeName(
+          r.toHolder
+        )===
+        normalizeName(
+          holderName
+        )
+      ){
+
+        return total+
+               num(r.amount);
+
+      }
+
+
+      return total;
+
+    },
+
+    0
+
+  );
+
+}
+
+
+/* =====================================================
+   PETTY CASH TRANSFER OUT
+   ===================================================== */
+
+function automaticTransferOut(
+  holderName,
+  date
+){
+
+  return getDaily(
+    "cash",
+    date
+  ).reduce(
+
+    (total,r)=>{
+
+      if(
+        cashRecordType(r)!=="transfer"
+      ){
+
+        return total;
+
+      }
+
+
+      if(
+        normalizeName(
+          r.fromHolder
+        )===
+        normalizeName(
+          holderName
+        )
+      ){
+
+        return total+
+               num(r.amount);
+
+      }
+
+
+      return total;
+
+    },
+
+    0
+
+  );
+
+}
+
+
+/* =====================================================
+   AUTOMATIC RECEIVED
+   ===================================================== */
+
+function automaticReceived(
+  holderName,
+  date
+){
+
+  return automaticCashReceived(
+    holderName,
+    date
   );
 
 }
@@ -654,7 +841,21 @@ function hasPettyActivity(
 ){
 
   const cashReceived=
-    automaticReceived(
+    automaticCashReceived(
+      holder,
+      date
+    );
+
+
+  const transferIn=
+    automaticTransferIn(
+      holder,
+      date
+    );
+
+
+  const transferOut=
+    automaticTransferOut(
       holder,
       date
     );
@@ -668,6 +869,8 @@ function hasPettyActivity(
 
 
   return cashReceived!==0 ||
+         transferIn!==0 ||
+         transferOut!==0 ||
          expensesPaid!==0;
 
 }
@@ -698,21 +901,22 @@ function getOpeningForDate(
     new Set();
 
 
+  /* =================================================
+     NORMAL CASH RECEIPTS
+     ================================================= */
+
   state.cash.forEach(r=>{
 
     if(
-
       r.date &&
       r.date<targetDate &&
-
+      cashRecordType(r)==="cash" &&
       normalizeName(
         r.receivedBy
       )===
-
       normalizeName(
         petty.holder
       )
-
     ){
 
       allDates.add(
@@ -724,10 +928,57 @@ function getOpeningForDate(
   });
 
 
+  /* =================================================
+     TRANSFER IN / OUT
+     ================================================= */
+
+  state.cash.forEach(r=>{
+
+    if(
+      r.date &&
+      r.date<targetDate &&
+      cashRecordType(r)==="transfer"
+    ){
+
+      const from=
+        normalizeName(
+          r.fromHolder
+        );
+
+      const to=
+        normalizeName(
+          r.toHolder
+        );
+
+      const holder=
+        normalizeName(
+          petty.holder
+        );
+
+
+      if(
+        from===holder ||
+        to===holder
+      ){
+
+        allDates.add(
+          r.date
+        );
+
+      }
+
+    }
+
+  });
+
+
+  /* =================================================
+     EXPENSES
+     ================================================= */
+
   state.expenses.forEach(r=>{
 
     if(
-
       r.date &&
       r.date<targetDate &&
 
@@ -757,7 +1008,21 @@ function getOpeningForDate(
   dates.forEach(date=>{
 
     const received=
-      automaticReceived(
+      automaticCashReceived(
+        petty.holder,
+        date
+      );
+
+
+    const transferIn=
+      automaticTransferIn(
+        petty.holder,
+        date
+      );
+
+
+    const transferOut=
+      automaticTransferOut(
         petty.holder,
         date
       );
@@ -772,7 +1037,9 @@ function getOpeningForDate(
 
     balance=
       balance+
-      received-
+      received+
+      transferIn-
+      transferOut-
       expenses;
 
   });
@@ -800,7 +1067,21 @@ function pettyFigures(
 
 
   const autoReceived=
-    automaticReceived(
+    automaticCashReceived(
+      petty.holder,
+      date
+    );
+
+
+  const autoTransferIn=
+    automaticTransferIn(
+      petty.holder,
+      date
+    );
+
+
+  const autoTransferOut=
+    automaticTransferOut(
       petty.holder,
       date
     );
@@ -842,7 +1123,8 @@ function pettyFigures(
 
   const received=
     manualReceived+
-    autoReceived;
+    autoReceived+
+    autoTransferIn;
 
 
   const expenses=
@@ -853,7 +1135,8 @@ function pettyFigures(
   const closing=
     opening+
     received-
-    expenses;
+    expenses-
+    autoTransferOut;
 
 
   return {
@@ -865,6 +1148,10 @@ function pettyFigures(
     manualExpenses,
 
     autoReceived,
+
+    autoTransferIn,
+
+    autoTransferOut,
 
     autoExpenses,
 
@@ -1157,11 +1444,17 @@ function addJob(){
 }
 
 
+/* =====================================================
+   ADD CASH
+   ===================================================== */
+
 function addCash(){
 
   state.cash.push({
 
     date:selectedDate(),
+
+    type:"cash",
 
     from:"",
 
@@ -1169,7 +1462,11 @@ function addCash(){
 
     amount:0,
 
-    receivedBy:""
+    receivedBy:"",
+
+    fromHolder:"",
+
+    toHolder:""
 
   });
 
@@ -1178,6 +1475,10 @@ function addCash(){
 
 }
 
+
+/* =====================================================
+   ADD EXPENSE
+   ===================================================== */
 
 function addExpense(){
 
@@ -1200,6 +1501,10 @@ function addExpense(){
 
 }
 
+
+/* =====================================================
+   ADD BANK
+   ===================================================== */
 
 function addBank(){
 
@@ -1238,6 +1543,72 @@ function setPettyStatus(
 
   state.petty[i].active=
     status==="active";
+
+
+  save();
+
+}
+
+
+/* =====================================================
+   UPDATE CASH RECORD
+   ===================================================== */
+
+function updateCash(
+  i,
+  key,
+  value
+){
+
+  if(
+    !state.cash ||
+    !state.cash[i]
+  ){
+
+    return;
+
+  }
+
+
+  state.cash[i][key]=
+    value;
+
+
+  if(
+    !state.cash[i].date
+  ){
+
+    state.cash[i].date=
+      selectedDate();
+
+  }
+
+
+  /*
+    When changing a normal cash receipt
+    into a transfer, clear fields that belong
+    to the other type.
+
+    This prevents accidental duplicate
+    calculations.
+  */
+
+  if(
+    key==="type"
+  ){
+
+    if(value==="transfer"){
+
+      state.cash[i].receivedBy="";
+
+    }else{
+
+      state.cash[i].fromHolder="";
+      state.cash[i].toHolder="";
+
+    }
+
+  }
 
 
   save();
@@ -1574,7 +1945,10 @@ function renderCash(){
 
   <tr>
 
+    <th>Type</th>
     <th>From Whom</th>
+    <th>Transfer From</th>
+    <th>Transfer To</th>
     <th>Job No</th>
     <th>Cash</th>
     <th>Received By</th>
@@ -1593,97 +1967,320 @@ function renderCash(){
         state.cash.indexOf(r);
 
 
+      const type=
+        cashRecordType(r);
+
+
+      const holderOptions=
+        holders
+          .map(h=>`
+
+            <option
+              value="${esc(h.name)}"
+              ${
+                normalizeName(
+                  r.toHolder
+                )===
+                normalizeName(
+                  h.name
+                )
+                ?"selected":""
+              }
+            >
+              ${esc(h.name)}
+            </option>
+
+          `)
+          .join("");
+
+
+      const fromHolderOptions=
+        holders
+          .map(h=>`
+
+            <option
+              value="${esc(h.name)}"
+              ${
+                normalizeName(
+                  r.fromHolder
+                )===
+                normalizeName(
+                  h.name
+                )
+                ?"selected":""
+              }
+            >
+              ${esc(h.name)}
+            </option>
+
+          `)
+          .join("");
+
+
       return `
 
       <tr>
 
-      <td>
+        <!-- TYPE -->
 
-        <input
-          value="${esc(r.from)}"
-          onchange="
-            updateArray(
-              'cash',
-              ${i},
-              'from',
-              this.value
-            )
-          "
-        >
+        <td>
 
-      </td>
+          <select
+            onchange="
+              updateCash(
+                ${i},
+                'type',
+                this.value
+              )
+            "
+          >
 
+            <option
+              value="cash"
+              ${type==="cash"?"selected":""}
+            >
+              Cash Received
+            </option>
 
-      <td>
+            <option
+              value="transfer"
+              ${type==="transfer"?"selected":""}
+            >
+              Petty Cash Transfer
+            </option>
 
-        <input
-          value="${esc(r.jobNo)}"
-          onchange="
-            updateArray(
-              'cash',
-              ${i},
-              'jobNo',
-              this.value
-            )
-          "
-        >
+          </select>
 
-      </td>
-
-
-      <td>
-
-        <input
-          type="number"
-          step="0.01"
-          value="${r.amount}"
-          onchange="
-            updateArray(
-              'cash',
-              ${i},
-              'amount',
-              num(this.value)
-            )
-          "
-        >
-
-      </td>
+        </td>
 
 
-      <td>
+        <!-- FROM WHOM -->
 
-        <input
-          value="${esc(r.receivedBy)}"
-          onchange="
-            updateArray(
-              'cash',
-              ${i},
-              'receivedBy',
-              this.value
-            )
-          "
-        >
+        <td>
 
-      </td>
+          <input
+            value="${esc(r.from||"")}"
+            ${
+              type==="transfer"
+                ?"readonly title=\"Not used for petty cash transfers\""
+                :""
+            }
+            onchange="
+              updateCash(
+                ${i},
+                'from',
+                this.value
+              )
+            "
+          >
+
+        </td>
 
 
-      <td>
+        <!-- TRANSFER FROM -->
 
-        <button
-          class="delete-btn"
-          onclick="
-            del(
-              'cash',
-              ${i}
-            )
-          "
-        >
+        <td>
 
-          Delete
+          ${
+            type==="transfer"
 
-        </button>
+            ?
 
-      </td>
+            `
+
+            <select
+              onchange="
+                updateCash(
+                  ${i},
+                  'fromHolder',
+                  this.value
+                )
+              "
+            >
+
+              <option value="">
+                Select Sender
+              </option>
+
+              ${fromHolderOptions}
+
+            </select>
+
+            `
+
+            :
+
+            `
+
+            <input
+              value=""
+              readonly
+              placeholder="Not applicable"
+              title="Only used for petty cash transfers"
+            >
+
+            `
+
+          }
+
+        </td>
+
+
+        <!-- TRANSFER TO -->
+
+        <td>
+
+          ${
+            type==="transfer"
+
+            ?
+
+            `
+
+            <select
+              onchange="
+                updateCash(
+                  ${i},
+                  'toHolder',
+                  this.value
+                )
+              "
+            >
+
+              <option value="">
+                Select Receiver
+              </option>
+
+              ${holderOptions}
+
+            </select>
+
+            `
+
+            :
+
+            `
+
+            <input
+              value=""
+              readonly
+              placeholder="Not applicable"
+              title="Only used for petty cash transfers"
+            >
+
+            `
+
+          }
+
+        </td>
+
+
+        <!-- JOB NUMBER -->
+
+        <td>
+
+          <input
+            value="${esc(r.jobNo||"")}"
+            ${
+              type==="transfer"
+                ?"readonly title=\"Not used for petty cash transfers\""
+                :""
+            }
+            onchange="
+              updateCash(
+                ${i},
+                'jobNo',
+                this.value
+              )
+            "
+          >
+
+        </td>
+
+
+        <!-- AMOUNT -->
+
+        <td>
+
+          <input
+            type="number"
+            step="0.01"
+            value="${r.amount||0}"
+            min="0"
+            onchange="
+              updateCash(
+                ${i},
+                'amount',
+                num(this.value)
+              )
+            "
+          >
+
+        </td>
+
+
+        <!-- RECEIVED BY -->
+
+        <td>
+
+          ${
+            type==="cash"
+
+            ?
+
+            `
+
+            <input
+              value="${esc(r.receivedBy||"")}"
+              placeholder="Received By"
+              onchange="
+                updateCash(
+                  ${i},
+                  'receivedBy',
+                  this.value
+                )
+              "
+            >
+
+            `
+
+            :
+
+            `
+
+            <input
+              value=""
+              readonly
+              placeholder="Automatic"
+              title="Receiver is selected above"
+            >
+
+            `
+
+          }
+
+        </td>
+
+
+        <!-- DELETE -->
+
+        <td>
+
+          <button
+            class="delete-btn"
+            onclick="
+              del(
+                'cash',
+                ${i}
+              )
+            "
+          >
+
+            Delete
+
+          </button>
+
+        </td>
 
       </tr>
 
@@ -1695,7 +2292,7 @@ function renderCash(){
   ${
     daily.length
       ? ""
-      : emptyRow(5)
+      : emptyRow(8)
   }
 
   </tbody>
@@ -2150,7 +2747,7 @@ function renderPetty(){
             step="0.01"
             value="${figures.received}"
             readonly
-            title="Automatically includes cash received by this holder"
+            title="Automatically includes normal cash received and petty cash transfers in"
           >
 
         </td>
@@ -2308,12 +2905,27 @@ function renderPreview(){
     getDaily("expenses");
 
 
+  /*
+    IMPORTANT:
+
+    Transfers between petty cash holders
+    are NOT company cash collected.
+
+    Therefore only normal cash receipts
+    are included here.
+  */
+
   const cashTotal=
-    dailyCash.reduce(
-      (a,r)=>
-        a+num(r.amount),
-      0
-    );
+    dailyCash
+      .filter(
+        r=>
+          cashRecordType(r)==="cash"
+      )
+      .reduce(
+        (a,r)=>
+          a+num(r.amount),
+        0
+      );
 
 
   const bankTotal=
@@ -2473,31 +3085,92 @@ function renderPreview(){
     rowsDaily(
       "cash",
 
-      r=>`
+      r=>{
 
-        <tr>
+        const type=
+          cashRecordType(r);
 
-          <td>
-            ${esc(r.from)}
-          </td>
 
-          <td>
-            ${esc(r.jobNo)}
-          </td>
+        if(type==="transfer"){
 
-          <td class="num">
-            ${num(r.amount).toFixed(2)}
-          </td>
+          return `
 
-          <td>
-            ${esc(r.receivedBy)}
-          </td>
+            <tr>
 
-        </tr>
+              <td>
+                Petty Cash Transfer
+              </td>
 
-      `,
+              <td>
+                —
+              </td>
 
-      4
+              <td>
+                ${esc(r.fromHolder||"")}
+              </td>
+
+              <td>
+                ${esc(r.toHolder||"")}
+              </td>
+
+              <td>
+                —
+              </td>
+
+              <td class="num">
+                ${num(r.amount).toFixed(2)}
+              </td>
+
+              <td>
+                —
+              </td>
+
+            </tr>
+
+          `;
+
+        }
+
+
+        return `
+
+          <tr>
+
+            <td>
+              Cash Received
+            </td>
+
+            <td>
+              ${esc(r.from||"")}
+            </td>
+
+            <td>
+              —
+            </td>
+
+            <td>
+              —
+            </td>
+
+            <td>
+              ${esc(r.jobNo||"")}
+            </td>
+
+            <td class="num">
+              ${num(r.amount).toFixed(2)}
+            </td>
+
+            <td>
+              ${esc(r.receivedBy||"")}
+            </td>
+
+          </tr>
+
+        `;
+
+      },
+
+      7
 
     );
 
@@ -2737,20 +3410,6 @@ function renderAll(){
    GOOGLE SHEETS BACKUP
    ===================================================== */
 
-/*
-   This function sends the COMPLETE current state
-   to Google Apps Script.
-
-   It uses the currently selected report date.
-
-   IMPORTANT:
-   The Google Apps Script must be deployed as:
-
-   Execute as: Me
-   Who has access: Anyone
-
-*/
-
 async function backupToGoogleSheets(){
 
   const date=
@@ -2786,8 +3445,6 @@ async function backupToGoogleSheets(){
 
   /*
     Create a clean copy of the data.
-
-    We do not send functions or DOM elements.
   */
 
   const backupData={
@@ -2834,6 +3491,12 @@ async function backupToGoogleSheets(){
 
             closing:figures.closing,
 
+            transferIn:
+              figures.autoTransferIn,
+
+            transferOut:
+              figures.autoTransferOut,
+
             active:Boolean(
               p.active
             ),
@@ -2851,10 +3514,6 @@ async function backupToGoogleSheets(){
 
   };
 
-
-  /*
-    Show backup message.
-  */
 
   showBackupStatus(
     "Backing up..."

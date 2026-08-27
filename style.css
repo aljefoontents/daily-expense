@@ -12,7 +12,58 @@ nav{display:flex;flex-direction:column;gap:6px}.nav-btn{background:transparent;b
 .modal{position:fixed;inset:0;background:#0008;display:flex;align-items:center;justify-content:center;z-index:20}.modal.hidden{display:none}.modal-card{background:#fff;width:min(470px,92vw);border-radius:9px;padding:25px;box-shadow:0 10px 40px #0006}.modal-head{display:flex;justify-content:space-between;align-items:center}.modal-head h2{margin:0}.modal-head button{border:0;background:transparent;font-size:27px;cursor:pointer}.modal-card label{display:block;padding:9px;border-bottom:1px solid #eee}.modal-actions{display:flex;gap:10px;margin-top:20px}
 @media(max-width:900px){.sidebar{width:190px}.main{margin-left:190px;padding:18px}.summary-grid,.mini-summary{grid-template-columns:repeat(2,1fr)}} 
 @media(max-width:650px){.sidebar{position:static;width:100%;height:auto}.sidebar-bottom{margin-top:15px}.main{margin-left:0}.topbar{display:block}.date-box{margin-top:15px}.summary-grid,.mini-summary{grid-template-columns:1fr}}
-@media print{body{background:#fff}.sidebar,.topbar,.summary-grid,#printModal,.section:not(#dashboard){display:none!important}.main{margin:0;padding:0}.report-paper{box-shadow:none;border:0;padding:10px}.report-block{break-inside:avoid}.report-block.hidden-print{display:none!important}}
+@media print{
+  body{
+    background:#fff;
+  }
+
+  .sidebar,
+  .topbar,
+  .summary-grid,
+  #printModal,
+  .section:not(#dashboard){
+    display:none!important;
+  }
+
+  .main{
+    margin:0;
+    padding:0;
+  }
+
+  .report-paper{
+    box-shadow:none;
+    border:0;
+    padding:10px;
+  }
+
+  .report-block{
+    break-inside:auto;
+    page-break-inside:auto;
+  }
+
+  .report-block.hidden-print{
+    display:none!important;
+  }
+
+  .report-block h2{
+    break-after:avoid;
+    page-break-after:avoid;
+  }
+
+  table{
+    break-inside:auto;
+    page-break-inside:auto;
+  }
+
+  tr{
+    break-inside:avoid;
+    page-break-inside:avoid;
+  }
+
+  thead{
+    display:table-header-group;
+  }
+}
 
 
 /* Petty cash holder status control */
@@ -20,6 +71,10 @@ nav{display:flex;flex-direction:column;gap:6px}.nav-btn{background:transparent;b
   min-width:110px;
   font-weight:700;
   border-radius:6px;
+}
 
 .status-active{border:1px solid #2e7d32;}
+}
+
 .status-inactive{border:1px solid #c62828;}
+}

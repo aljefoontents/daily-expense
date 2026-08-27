@@ -563,6 +563,45 @@ function automaticReceived(
 
 }
 
+/* =====================================================
+   AUTOMATIC CASH TRANSFERS OUT
+   ===================================================== */
+
+function automaticCashTransfersOut(
+  holderName,
+  date
+){
+
+  return getDaily(
+    "cash",
+    date
+  ).reduce(
+
+    (total,r)=>{
+
+      if(
+        normalizeName(r.from)===
+        normalizeName(holderName)
+      ){
+
+        return total+
+               num(r.amount);
+
+      }
+
+      return total;
+
+    },
+
+    0
+
+  );
+
+}
+
+/* =====================================================
+   AUTOMATIC EXPENSES
+   ===================================================== */
 
 /* =====================================================
    AUTOMATIC EXPENSES
@@ -594,7 +633,6 @@ function automaticExpenses(
 
       }
 
-
       return total;
 
     },
@@ -604,7 +642,6 @@ function automaticExpenses(
   );
 
 }
-
 
 /* =====================================================
    PREVIOUS DATE
@@ -840,20 +877,25 @@ function pettyFigures(
   }
 
 
-  const received=
-    manualReceived+
-    autoReceived;
+  const cashTransfersOut=
+  automaticCashTransfersOut(
+    petty.holder,
+    date
+  );
 
+const received=
+  manualReceived+
+  autoReceived;
 
-  const expenses=
-    manualExpenses+
-    autoExpenses;
+const expenses=
+  manualExpenses+
+  autoExpenses+
+  cashTransfersOut;
 
-
-  const closing=
-    opening+
-    received-
-    expenses;
+const closing=
+  opening+
+  received-
+  expenses;
 
 
   return {
@@ -868,6 +910,8 @@ function pettyFigures(
 
     autoExpenses,
 
+    cashTransfersOut,
+
     received,
 
     expenses,
@@ -877,7 +921,6 @@ function pettyFigures(
   };
 
 }
-
 
 /* =====================================================
    STARTUP

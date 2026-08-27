@@ -7,151 +7,846 @@
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/png" href="favicon.png">
 </head>
+
 <body>
+
   <aside class="sidebar">
+
     <div class="brand">
-      <div class="brand-name">AL JEFOON TENTS</div>
-      <div class="brand-sub">Daily Expense</div>
+
+      <div class="brand-name">
+        AL JEFOON TENTS
+      </div>
+
+      <div class="brand-sub">
+        Daily Expense
+      </div>
+
     </div>
+
     <nav>
-      <button class="nav-btn active" data-section="dashboard">Daily Report</button>
-      <button class="nav-btn" data-section="jobs">Daily Jobs</button>
-      <button class="nav-btn" data-section="cash">Cash Received</button>
-      <button class="nav-btn" data-section="expenses">Expenses</button>
-      <button class="nav-btn" data-section="bank">Bank Transfers</button>
-      <button class="nav-btn" data-section="petty">Petty Cash</button>
-      <button class="nav-btn" data-section="remarks">Management Remarks</button>
+
+      <button
+        class="nav-btn active"
+        data-section="dashboard"
+      >
+        Daily Report
+      </button>
+
+      <button
+        class="nav-btn"
+        data-section="jobs"
+      >
+        Daily Jobs
+      </button>
+
+      <button
+        class="nav-btn"
+        data-section="cash"
+      >
+        Cash Received
+      </button>
+
+      <button
+        class="nav-btn"
+        data-section="expenses"
+      >
+        Expenses
+      </button>
+
+      <button
+        class="nav-btn"
+        data-section="bank"
+      >
+        Bank Transfers
+      </button>
+
+      <button
+        class="nav-btn"
+        data-section="petty"
+      >
+        Petty Cash
+      </button>
+
+      <button
+        class="nav-btn"
+        data-section="remarks"
+      >
+        Management Remarks
+      </button>
+
     </nav>
+
     <div class="sidebar-bottom">
-  <button id="printReportBtn" class="yellow-btn">Print Report</button>
-  <button id="printOptionsBtn" class="dark-btn">Print Options</button>
-  <button
-    id="googleBackupBtn"
-    class="yellow-btn"
-    onclick="backupToGoogleSheets()"
-  >
-    Backup to Google Sheets
-  </button>
-</div>
+
+      <button
+        id="printReportBtn"
+        class="yellow-btn"
+      >
+        Print Report
+      </button>
+
+      <button
+        id="printOptionsBtn"
+        class="dark-btn"
+      >
+        Print Options
+      </button>
+
+      <button
+        id="googleBackupBtn"
+        class="yellow-btn"
+        onclick="backupToGoogleSheets()"
+      >
+        Backup to Google Sheets
+      </button>
+
+    </div>
+
   </aside>
 
+
   <main class="main">
+
     <header class="topbar">
+
       <div>
-        <h1>Daily Expense Report</h1>
-        <p>Cash, expenses, bank receipts and petty cash control</p>
+
+        <h1>
+          Daily Expense Report
+        </h1>
+
+        <p>
+          Cash, expenses, bank receipts and petty cash control
+        </p>
+
       </div>
+
       <div class="date-box">
-        <label for="reportDate">Date</label>
-        <input type="date" id="reportDate">
+
+        <label for="reportDate">
+          Date
+        </label>
+
+        <input
+          type="date"
+          id="reportDate"
+        >
+
       </div>
+
     </header>
 
-    <section id="dashboard" class="section active">
+
+    <!-- =================================================
+         DASHBOARD
+         ================================================= -->
+
+    <section
+      id="dashboard"
+      class="section active"
+    >
+
       <div class="summary-grid">
-        <div class="summary-card"><span>Total Cash Collected</span><strong id="sumCash">AED 0.00</strong></div>
-        <div class="summary-card"><span>Total Bank Transfers</span><strong id="sumBank">AED 0.00</strong></div>
-        <div class="summary-card"><span>Total Expenses</span><strong id="sumExpenses">AED 0.00</strong></div>
-        <div class="summary-card"><span>Total Petty Cash Closing</span><strong id="sumPetty">AED 0.00</strong></div>
+
+        <div class="summary-card">
+
+          <span>
+            Total Cash Collected
+          </span>
+
+          <strong id="sumCash">
+            AED 0.00
+          </strong>
+
+        </div>
+
+
+        <div class="summary-card">
+
+          <span>
+            Total Bank Transfers
+          </span>
+
+          <strong id="sumBank">
+            AED 0.00
+          </strong>
+
+        </div>
+
+
+        <div class="summary-card">
+
+          <span>
+            Total Expenses
+          </span>
+
+          <strong id="sumExpenses">
+            AED 0.00
+          </strong>
+
+        </div>
+
+
+        <div class="summary-card">
+
+          <span>
+            Total Petty Cash Closing
+          </span>
+
+          <strong id="sumPetty">
+            AED 0.00
+          </strong>
+
+        </div>
+
       </div>
+
 
       <div class="report-paper">
-        <div class="report-title">SUMMARY DASHBOARD</div>
+
+        <div class="report-title">
+          SUMMARY DASHBOARD
+        </div>
+
+
         <div class="mini-summary">
-          <div><span>Total Cash Collected</span><b id="paperCash">0.00</b></div>
-          <div><span>Total Bank Transfers</span><b id="paperBank">0.00</b></div>
-          <div><span>Total Expenses</span><b id="paperExpenses">0.00</b></div>
-          <div><span>Total Petty Cash Closing</span><b id="paperPetty">0.00</b></div>
+
+          <div>
+
+            <span>
+              Total Cash Collected
+            </span>
+
+            <b id="paperCash">
+              0.00
+            </b>
+
+          </div>
+
+
+          <div>
+
+            <span>
+              Total Bank Transfers
+            </span>
+
+            <b id="paperBank">
+              0.00
+            </b>
+
+          </div>
+
+
+          <div>
+
+            <span>
+              Total Expenses
+            </span>
+
+            <b id="paperExpenses">
+              0.00
+            </b>
+
+          </div>
+
+
+          <div>
+
+            <span>
+              Total Petty Cash Closing
+            </span>
+
+            <b id="paperPetty">
+              0.00
+            </b>
+
+          </div>
+
         </div>
 
-        <div class="report-block">
-          <h2>DAILY JOBS</h2>
-          <table id="jobsPreview"><thead><tr><th>Job No</th><th>Client</th><th>Description</th><th>Total Amount</th><th>Cash</th><th>Incharge</th><th>Status</th></tr></thead><tbody></tbody></table>
-        </div>
+
+        <!-- DAILY JOBS -->
 
         <div class="report-block">
-          <h2>CASH RECEIVED</h2>
-          <table id="cashPreview"><thead><tr><th>From Whom</th><th>Job No</th><th>Cash</th><th>Received By</th></tr></thead><tbody></tbody></table>
+
+          <h2>
+            DAILY JOBS
+          </h2>
+
+          <table id="jobsPreview">
+
+            <thead>
+
+              <tr>
+
+                <th>Job No</th>
+                <th>Client</th>
+                <th>Description</th>
+                <th>Total Amount</th>
+                <th>Cash</th>
+                <th>Incharge</th>
+                <th>Status</th>
+
+              </tr>
+
+            </thead>
+
+            <tbody></tbody>
+
+          </table>
+
         </div>
 
-        <div class="report-block">
-          <h2>EXPENSES</h2>
-          <table id="expensePreview"><thead><tr><th>Paid To</th><th>Expense Type</th><th>Amount</th><th>Paid By</th></tr></thead><tbody></tbody></table>
-        </div>
+
+        <!-- CASH RECEIVED -->
 
         <div class="report-block">
-          <h2>BANK TRANSFERS RECEIVED</h2>
-          <table id="bankPreview"><thead><tr><th>Received On</th><th>Reference</th><th>From Whom</th><th>Amount</th><th>Remarks</th></tr></thead><tbody></tbody></table>
+
+          <h2>
+            CASH RECEIVED
+          </h2>
+
+          <table id="cashPreview">
+
+            <thead>
+
+              <tr>
+
+                <th>Type</th>
+                <th>From Whom</th>
+                <th>Transfer From</th>
+                <th>Transfer To</th>
+                <th>Job No</th>
+                <th>Cash</th>
+                <th>Received By</th>
+
+              </tr>
+
+            </thead>
+
+            <tbody></tbody>
+
+          </table>
+
         </div>
 
-        <div class="report-block">
-          <h2>PETTY CASH BALANCE</h2>
-          <table id="pettyPreview"><thead><tr><th>Holder</th><th>Opening</th><th>Received</th><th>Expenses</th><th>Closing</th></tr></thead><tbody></tbody></table>
-        </div>
+
+        <!-- EXPENSES -->
 
         <div class="report-block">
-          <h2>INACTIVE PETTY CASH</h2>
-          <table id="inactivePreview"><thead><tr><th>Holder</th><th>Opening</th><th>Received</th><th>Expenses</th><th>Closing</th></tr></thead><tbody></tbody></table>
+
+          <h2>
+            EXPENSES
+          </h2>
+
+          <table id="expensePreview">
+
+            <thead>
+
+              <tr>
+
+                <th>Paid To</th>
+                <th>Expense Type</th>
+                <th>Amount</th>
+                <th>Paid By</th>
+
+              </tr>
+
+            </thead>
+
+            <tbody></tbody>
+
+          </table>
+
         </div>
+
+
+        <!-- BANK -->
+
+        <div class="report-block">
+
+          <h2>
+            BANK TRANSFERS RECEIVED
+          </h2>
+
+          <table id="bankPreview">
+
+            <thead>
+
+              <tr>
+
+                <th>Received On</th>
+                <th>Reference</th>
+                <th>From Whom</th>
+                <th>Amount</th>
+                <th>Remarks</th>
+
+              </tr>
+
+            </thead>
+
+            <tbody></tbody>
+
+          </table>
+
+        </div>
+
+
+        <!-- PETTY CASH -->
+
+        <div class="report-block">
+
+          <h2>
+            PETTY CASH BALANCE
+          </h2>
+
+          <table id="pettyPreview">
+
+            <thead>
+
+              <tr>
+
+                <th>Holder</th>
+                <th>Opening</th>
+                <th>Received</th>
+                <th>Expenses</th>
+                <th>Closing</th>
+
+              </tr>
+
+            </thead>
+
+            <tbody></tbody>
+
+          </table>
+
+        </div>
+
+
+        <!-- INACTIVE PETTY CASH -->
+
+        <div class="report-block">
+
+          <h2>
+            INACTIVE PETTY CASH
+          </h2>
+
+          <table id="inactivePreview">
+
+            <thead>
+
+              <tr>
+
+                <th>Holder</th>
+                <th>Opening</th>
+                <th>Received</th>
+                <th>Expenses</th>
+                <th>Closing</th>
+
+              </tr>
+
+            </thead>
+
+            <tbody></tbody>
+
+          </table>
+
+        </div>
+
+
+        <!-- REMARKS -->
 
         <div class="report-block remarks-preview">
-          <h2>MANAGEMENT REMARKS</h2>
+
+          <h2>
+            MANAGEMENT REMARKS
+          </h2>
+
           <div id="remarksPreview"></div>
+
         </div>
+
       </div>
+
     </section>
 
-    <section id="jobs" class="section">
-      <div class="section-head"><h2>Daily Jobs</h2><button class="add-btn" onclick="addJob()">+ Add Job</button></div>
+
+    <!-- =================================================
+         DAILY JOBS
+         ================================================= -->
+
+    <section
+      id="jobs"
+      class="section"
+    >
+
+      <div class="section-head">
+
+        <h2>
+          Daily Jobs
+        </h2>
+
+        <button
+          class="add-btn"
+          onclick="addJob()"
+        >
+          + Add Job
+        </button>
+
+      </div>
+
       <div id="jobsEditor"></div>
+
     </section>
 
-    <section id="cash" class="section">
-      <div class="section-head"><h2>Cash Received</h2><button class="add-btn" onclick="addCash()">+ Add Cash</button></div>
+
+    <!-- =================================================
+         CASH RECEIVED / PETTY CASH TRANSFERS
+         ================================================= -->
+
+    <section
+      id="cash"
+      class="section"
+    >
+
+      <div class="section-head">
+
+        <h2>
+          Cash Received
+        </h2>
+
+        <button
+          class="add-btn"
+          onclick="addCash()"
+        >
+          + Add Cash
+        </button>
+
+      </div>
+
+
+      <div
+        class="info-box"
+        style="margin-bottom:15px;"
+      >
+
+        <b>Cash Received:</b>
+        Use this when money is received from a customer
+        or another external source.
+
+        <br><br>
+
+        <b>Petty Cash Transfer:</b>
+        Use this when one petty cash holder gives money
+        to another petty cash holder.
+
+        <br><br>
+
+        A petty cash transfer automatically creates:
+
+        <b>Cash Out</b> for the sender and
+        <b>Cash In</b> for the receiver.
+
+        It is <b>not treated as an expense</b>.
+
+      </div>
+
+
       <div id="cashEditor"></div>
+
     </section>
 
-    <section id="expenses" class="section">
-      <div class="section-head"><h2>Expenses</h2><button class="add-btn" onclick="addExpense()">+ Add Expense</button></div>
+
+    <!-- =================================================
+         EXPENSES
+         ================================================= -->
+
+    <section
+      id="expenses"
+      class="section"
+    >
+
+      <div class="section-head">
+
+        <h2>
+          Expenses
+        </h2>
+
+        <button
+          class="add-btn"
+          onclick="addExpense()"
+        >
+          + Add Expense
+        </button>
+
+      </div>
+
       <div id="expenseEditor"></div>
+
     </section>
 
-    <section id="bank" class="section">
-      <div class="section-head"><h2>Bank Transfers Received</h2><button class="add-btn" onclick="addBank()">+ Add Transfer</button></div>
+
+    <!-- =================================================
+         BANK
+         ================================================= -->
+
+    <section
+      id="bank"
+      class="section"
+    >
+
+      <div class="section-head">
+
+        <h2>
+          Bank Transfers Received
+        </h2>
+
+        <button
+          class="add-btn"
+          onclick="addBank()"
+        >
+          + Add Transfer
+        </button>
+
+      </div>
+
       <div id="bankEditor"></div>
+
     </section>
 
-    <section id="petty" class="section">
-      <div class="section-head"><h2>Petty Cash</h2></div>
-      <div class="info-box">Closing is calculated automatically as <b>Opening + Received - Expenses</b>. Active holders are included in the main report; inactive holders appear separately.</div>
+
+    <!-- =================================================
+         PETTY CASH
+         ================================================= -->
+
+    <section
+      id="petty"
+      class="section"
+    >
+
+      <div class="section-head">
+
+        <h2>
+          Petty Cash
+        </h2>
+
+      </div>
+
+
+      <div class="info-box">
+
+        Closing is calculated automatically as:
+
+        <b>
+          Opening + Received + Transfers In
+          - Expenses - Transfers Out
+        </b>.
+
+        Active holders are included in the main report;
+        inactive holders appear separately.
+
+      </div>
+
+
       <div id="pettyEditor"></div>
+
     </section>
 
-    <section id="remarks" class="section">
-      <div class="section-head"><h2>Management Remarks</h2></div>
-      <textarea id="remarksInput" class="remarks-input" placeholder="Enter management remarks..."></textarea>
+
+    <!-- =================================================
+         MANAGEMENT REMARKS
+         ================================================= -->
+
+    <section
+      id="remarks"
+      class="section"
+    >
+
+      <div class="section-head">
+
+        <h2>
+          Management Remarks
+        </h2>
+
+      </div>
+
+      <textarea
+        id="remarksInput"
+        class="remarks-input"
+        placeholder="Enter management remarks..."
+      ></textarea>
+
     </section>
+
   </main>
 
-  <div id="printModal" class="modal hidden">
+
+  <!-- =================================================
+       PRINT MODAL
+       ================================================= -->
+
+  <div
+    id="printModal"
+    class="modal hidden"
+  >
+
     <div class="modal-card">
-      <div class="modal-head"><h2>Print Options</h2><button id="closeModal">×</button></div>
-      <p>Select exactly what you want to print.</p>
-      <label><input type="checkbox" class="print-check" value="summary" checked> Summary Dashboard</label>
-      <label><input type="checkbox" class="print-check" value="jobs" checked> Daily Jobs</label>
-      <label><input type="checkbox" class="print-check" value="cash" checked> Cash Received</label>
-      <label><input type="checkbox" class="print-check" value="expenses" checked> Expenses</label>
-      <label><input type="checkbox" class="print-check" value="bank" checked> Bank Transfers</label>
-      <label><input type="checkbox" class="print-check" value="petty" checked> Petty Cash</label>
-      <label><input type="checkbox" class="print-check" value="inactive" checked> Inactive Petty Cash</label>
-      <label><input type="checkbox" class="print-check" value="remarks" checked> Management Remarks</label>
-      <div class="modal-actions">
-        <button id="printSelected" class="yellow-btn">Print Selected</button>
-        <button id="printFull" class="dark-btn">Print Full Report</button>
+
+      <div class="modal-head">
+
+        <h2>
+          Print Options
+        </h2>
+
+        <button id="closeModal">
+          ×
+        </button>
+
       </div>
+
+
+      <p>
+        Select exactly what you want to print.
+      </p>
+
+
+      <label>
+
+        <input
+          type="checkbox"
+          class="print-check"
+          value="summary"
+          checked
+        >
+
+        Summary Dashboard
+
+      </label>
+
+
+      <label>
+
+        <input
+          type="checkbox"
+          class="print-check"
+          value="jobs"
+          checked
+        >
+
+        Daily Jobs
+
+      </label>
+
+
+      <label>
+
+        <input
+          type="checkbox"
+          class="print-check"
+          value="cash"
+          checked
+        >
+
+        Cash Received
+
+      </label>
+
+
+      <label>
+
+        <input
+          type="checkbox"
+          class="print-check"
+          value="expenses"
+          checked
+        >
+
+        Expenses
+
+      </label>
+
+
+      <label>
+
+        <input
+          type="checkbox"
+          class="print-check"
+          value="bank"
+          checked
+        >
+
+        Bank Transfers
+
+      </label>
+
+
+      <label>
+
+        <input
+          type="checkbox"
+          class="print-check"
+          value="petty"
+          checked
+        >
+
+        Petty Cash
+
+      </label>
+
+
+      <label>
+
+        <input
+          type="checkbox"
+          class="print-check"
+          value="inactive"
+          checked
+        >
+
+        Inactive Petty Cash
+
+      </label>
+
+
+      <label>
+
+        <input
+          type="checkbox"
+          class="print-check"
+          value="remarks"
+          checked
+        >
+
+        Management Remarks
+
+      </label>
+
+
+      <div class="modal-actions">
+
+        <button
+          id="printSelected"
+          class="yellow-btn"
+        >
+          Print Selected
+        </button>
+
+        <button
+          id="printFull"
+          class="dark-btn"
+        >
+          Print Full Report
+        </button>
+
+      </div>
+
     </div>
+
   </div>
 
+
   <script src="script.js"></script>
+
 </body>
 </html>
